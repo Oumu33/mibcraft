@@ -1,0 +1,296 @@
+EXAMPLE-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, Gauge32, Counter32, TimeTicks
+        FROM SNMPv2-SMI
+    DisplayString, TruthValue
+        FROM SNMPv2-TC;
+
+exampleMIB MODULE-IDENTITY
+    LAST-UPDATED "202401010000Z"
+    ORGANIZATION "Example Inc."
+    CONTACT-INFO "support@example.com"
+    DESCRIPTION "Example MIB for demonstration"
+    ::= { 1 3 6 1 4 1 99999 }
+
+-- 系统信息组
+exampleSystem OBJECT IDENTIFIER ::= { exampleMIB 1 }
+
+sysName OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..255))
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "系统名称"
+    ::= { exampleSystem 1 }
+
+sysUptime OBJECT-TYPE
+    SYNTAX      TimeTicks
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "系统运行时间（百分之一秒）"
+    ::= { exampleSystem 2 }
+
+sysStatus OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    unknown(0),
+                    normal(1),
+                    warning(2),
+                    critical(3)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "系统状态"
+    ::= { exampleSystem 3 }
+
+-- 接口信息组
+exampleInterfaces OBJECT IDENTIFIER ::= { exampleMIB 2 }
+
+ifNumber OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "接口数量"
+    ::= { exampleInterfaces 1 }
+
+ifTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF IfEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "接口表"
+    ::= { exampleInterfaces 2 }
+
+ifEntry OBJECT-TYPE
+    SYNTAX      IfEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "接口条目"
+    INDEX       { ifIndex }
+    ::= { ifTable 1 }
+
+IfEntry ::= SEQUENCE {
+    ifIndex         Integer32,
+    ifDescr         DisplayString,
+    ifType          Integer32,
+    ifSpeed         Gauge32,
+    ifAdminStatus   INTEGER,
+    ifOperStatus    INTEGER,
+    ifInOctets      Counter32,
+    ifOutOctets     Counter32,
+    ifInErrors      Counter32,
+    ifOutErrors     Counter32
+}
+
+ifIndex OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "接口索引"
+    ::= { ifEntry 1 }
+
+ifDescr OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..255))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "接口描述"
+    ::= { ifEntry 2 }
+
+ifType OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "接口类型"
+    ::= { ifEntry 3 }
+
+ifSpeed OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "接口速率 (bps)"
+    ::= { ifEntry 4 }
+
+ifAdminStatus OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    up(1),
+                    down(2),
+                    testing(3)
+                }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "管理状态"
+    ::= { ifEntry 5 }
+
+ifOperStatus OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    up(1),
+                    down(2),
+                    testing(3),
+                    unknown(4),
+                    dormant(5),
+                    notPresent(6),
+                    lowerLayerDown(7)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "运行状态"
+    ::= { ifEntry 6 }
+
+ifInOctets OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "接收字节数"
+    ::= { ifEntry 7 }
+
+ifOutOctets OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "发送字节数"
+    ::= { ifEntry 8 }
+
+ifInErrors OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "接收错误数"
+    ::= { ifEntry 9 }
+
+ifOutErrors OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "发送错误数"
+    ::= { ifEntry 10 }
+
+-- CPU 信息组
+exampleCPU OBJECT IDENTIFIER ::= { exampleMIB 3 }
+
+cpuUsage OBJECT-TYPE
+    SYNTAX      Gauge32 (0..100)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "CPU 使用率百分比"
+    ::= { exampleCPU 1 }
+
+cpuUser OBJECT-TYPE
+    SYNTAX      Gauge32 (0..100)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "用户态 CPU 使用率"
+    ::= { exampleCPU 2 }
+
+cpuSystem OBJECT-TYPE
+    SYNTAX      Gauge32 (0..100)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "内核态 CPU 使用率"
+    ::= { exampleCPU 3 }
+
+cpuIdle OBJECT-TYPE
+    SYNTAX      Gauge32 (0..100)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "空闲 CPU 百分比"
+    ::= { exampleCPU 4 }
+
+-- 内存信息组
+exampleMemory OBJECT IDENTIFIER ::= { exampleMIB 4 }
+
+memTotal OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "总内存大小 (KB)"
+    ::= { exampleMemory 1 }
+
+memUsed OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "已用内存大小 (KB)"
+    ::= { exampleMemory 2 }
+
+memFree OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "空闲内存大小 (KB)"
+    ::= { exampleMemory 3 }
+
+memUsage OBJECT-TYPE
+    SYNTAX      Gauge32 (0..100)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "内存使用率百分比"
+    ::= { exampleMemory 4 }
+
+-- 磁盘信息组
+exampleDisk OBJECT IDENTIFIER ::= { exampleMIB 5 }
+
+diskTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF DiskEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "磁盘表"
+    ::= { exampleDisk 1 }
+
+diskEntry OBJECT-TYPE
+    SYNTAX      DiskEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "磁盘条目"
+    INDEX       { diskIndex }
+    ::= { diskTable 1 }
+
+DiskEntry ::= SEQUENCE {
+    diskIndex       Integer32,
+    diskPath        DisplayString,
+    diskTotal       Gauge32,
+    diskUsed        Gauge32,
+    diskFree        Gauge32,
+    diskUsage       Gauge32
+}
+
+diskIndex OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "磁盘索引"
+    ::= { diskEntry 1 }
+
+diskPath OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..255))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "磁盘路径"
+    ::= { diskEntry 2 }
+
+diskTotal OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "磁盘总大小 (MB)"
+    ::= { diskEntry 3 }
+
+diskUsed OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "已用磁盘大小 (MB)"
+    ::= { diskEntry 4 }
+
+diskFree OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "空闲磁盘大小 (MB)"
+    ::= { diskEntry 5 }
+
+diskUsage OBJECT-TYPE
+    SYNTAX      Gauge32 (0..100)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "磁盘使用率百分比"
+    ::= { diskEntry 6 }
+
+END

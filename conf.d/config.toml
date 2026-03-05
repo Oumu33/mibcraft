@@ -1,0 +1,47 @@
+# MIB-Agent 配置文件
+
+[global]
+# MIB 文件搜索目录
+mib_dirs = ["./mibs", "/usr/share/snmp/mibs", "/var/lib/snmp/mibs"]
+
+# 全局标签
+[global.labels]
+env = "production"
+region = "cn-east-1"
+
+[log]
+level = "info"
+output = "stdout"
+
+[ai]
+enabled = true
+model_priority = ["deepseek", "gpt4o"]
+
+[ai.models.deepseek]
+base_url = "https://api.deepseek.com/v1"
+api_key = "${DEEPSEEK_API_KEY}"
+model = "deepseek-chat"
+
+[ai.models.gpt4o]
+base_url = "https://api.openai.com/v1"
+api_key = "${OPENAI_API_KEY}"
+model = "gpt-4o"
+
+[ai.mcp]
+enabled = false
+# 配置 MCP 服务器用于扩展功能
+# [[ai.mcp.servers]]
+# name = "filesystem"
+# command = "/usr/local/bin/mcp-filesystem"
+# args = ["/path/to/mibs"]
+
+[mib]
+cache_dir = "./mib_cache"
+auto_load = true
+parse_timeout = 30
+
+[generator]
+output_dir = "./output"
+default_community = "public"
+default_version = 2
+default_interval = "30s"
