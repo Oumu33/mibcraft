@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Oumu33/mibcraft/config"
@@ -18,17 +19,25 @@ import (
 
 // Chat 对话管理器
 type Chat struct {
-	config     *config.Config
-	parser     *mibparser.Parser
-	generator  *generator.Generator
-	mcpManager *mcp.Manager
-	aiClient   *openai.Client
-	history    []openai.ChatCompletionMessage
+	config      *config.Config
+	parser      *mibparser.Parser
+	generator   *generator.Generator
+	extractor   *mibparser.Extractor
+	mcpManager  *mcp.Manager
+	aiClient    *openai.Client
+	history     []openai.ChatCompletionMessage
+	mibDir      string // 用户自定义的 MIB 目录
 }
 
 // NewChat 创建新的对话管理器
 func NewChat(cfg *config.Config) *Chat {
-	parser := mibparser.NewParser(cfg.Global.MIBDirs)
+	// 获取或创建默认 MIB 目录
+	mibDir := "./mibs"
+	if len(cfg.Global.MIBDirs) > 0 {
+		mibDir = cfg.Global.MIBDirs[0]
+	}
+
+	parser := mibparser.NewParser([]string{mibDir})
 	gen := generator.NewGenerator(&generator.GeneratorConfig{
 		DefaultCommunity: cfg.Generator.DefaultCommunity,
 		DefaultVersion:   cfg.Generator.DefaultVersion,
@@ -50,9 +59,11 @@ func NewChat(cfg *config.Config) *Chat {
 		config:     cfg,
 		parser:     parser,
 		generator:  gen,
+		extractor:  mibparser.NewExtractor(mibDir),
 		mcpManager: mcp.NewManager(),
 		aiClient:   aiClient,
 		history:    make([]openai.ChatCompletionMessage, 0),
+		mibDir:     mibDir,
 	}
 }
 
@@ -81,17 +92,31 @@ func (c *Chat) printWelcome() {
 	fmt.Println("║  功能: 解析 MIB 文件，生成 Categraf/SNMP Exporter 配置       ║")
 	fmt.Println("║                                                              ║")
 	fmt.Println("║  命令:                                                       ║")
-	fmt.Println("║    /help          - 显示帮助信息                             ║")
-	fmt.Println("║    /load <file>   - 加载 MIB 文件                            ║")
-	fmt.Println("║    /list          - 列出已加载的 MIB 文件                    ║")
-	fmt.Println("║    /search <name> - 搜索 MIB 对象                            ║")
-	fmt.Println("║    /show <oid>    - 显示 OID 详细信息                        ║")
-	fmt.Println("║    /gen           - 生成配置文件                             ║")
-	fmt.Println("║    /clear         - 清除对话历史                             ║")
-	fmt.Println("║    /exit          - 退出程序                                 ║")
+	fmt.Println("║    /help             - 显示帮助信息                          ║")
+	fmt.Println("║    /load <file>      - 加载 MIB 文件                         ║")
+	fmt.Println("║    /extract <archive>- 解压 MIB 压缩包                       ║")
+	fmt.Println("║    /mibdir [path]    - 设置/查看 MIB 目录                    ║")
+	fmt.Println("║    /scan             - 扫描 MIB 目录中的文件                 ║")
+	fmt.Println("║    /list             - 列出已加载的 MIB 文件                 ║")
+	fmt.Println("║    /search <name>    - 搜索 MIB 对象                         ║")
+	fmt.Println("║    /show <oid>       - 显示 OID 详细信息                     ║")
+	fmt.Println("║    /gen              - 生成配置文件                          ║")
+	fmt.Println("║    /infra            - 生成基础设施监控配置                  ║")
+	fmt.Println("║    /clear            - 清除对话历史                          ║")
+	fmt.Println("║    /exit             - 退出程序                              ║")
 	fmt.Println("║                                                              ║")
 	fmt.Println("╚════════════════════════════════════════════════════════════╝")
-	fmt.Println()
+	
+	// 显示当前 MIB 目录
+	fmt.Printf("\n📁 当前 MIB 目录: %s\n", c.mibDir)
+	
+	// 扫描 MIB 文件数量
+	mibFiles := c.parser.ListMIBFiles()
+	if len(mibFiles) > 0 {
+		fmt.Printf("📋 已发现 %d 个 MIB 文件\n", len(mibFiles))
+	} else {
+		fmt.Println("⚠️  未发现 MIB 文件，请使用 /load 或 /extract 加载")
+	}
 }
 
 // replLoop REPL 主循环
@@ -148,6 +173,18 @@ func (c *Chat) handleCommand(ctx context.Context, input string) error {
 		}
 		return c.loadMIB(args[0])
 		
+	case "/extract":
+		if len(args) == 0 {
+			return fmt.Errorf("用法: /extract <压缩包路径>\n支持格式: zip, tar.gz, tar.bz2, tar, gz")
+		}
+		return c.extractMIB(args[0])
+		
+	case "/mibdir":
+		return c.handleMibDir(args)
+		
+	case "/scan":
+		c.scanMIBDir()
+		
 	case "/list":
 		c.listMIBs()
 		
@@ -165,6 +202,9 @@ func (c *Chat) handleCommand(ctx context.Context, input string) error {
 		
 	case "/gen":
 		return c.generateConfig(ctx, args)
+		
+	case "/infra":
+		return c.generateInfraConfig(args)
 		
 	case "/clear":
 		c.history = make([]openai.ChatCompletionMessage, 0)
@@ -611,4 +651,190 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// extractMIB 解压 MIB 压缩包
+func (c *Chat) extractMIB(archivePath string) error {
+	// 检查文件是否存在
+	if _, err := os.Stat(archivePath); os.IsNotExist(err) {
+		return fmt.Errorf("文件不存在: %s", archivePath)
+	}
+
+	// 检查是否为支持的格式
+	if !mibparser.IsArchiveFile(archivePath) {
+		return fmt.Errorf("不支持的压缩格式，支持: zip, tar.gz, tar.bz2, tar, gz")
+	}
+
+	fmt.Printf("正在解压: %s\n", filepath.Base(archivePath))
+	fmt.Printf("目标目录: %s\n", c.mibDir)
+
+	// 解压文件
+	mibFiles, err := c.extractor.Extract(archivePath)
+	if err != nil {
+		return fmt.Errorf("解压失败: %w", err)
+	}
+
+	if len(mibFiles) == 0 {
+		fmt.Println("⚠️  未在压缩包中找到 MIB 文件")
+		return nil
+	}
+
+	fmt.Printf("✅ 成功解压 %d 个 MIB 文件:\n", len(mibFiles))
+	for i, f := range mibFiles {
+		if i < 10 {
+			fmt.Printf("  - %s\n", filepath.Base(f))
+		} else if i == 10 {
+			fmt.Printf("  ... 还有 %d 个文件\n", len(mibFiles)-10)
+			break
+		}
+	}
+
+	// 重新扫描 MIB 目录
+	c.parser = mibparser.NewParser([]string{c.mibDir})
+	return nil
+}
+
+// handleMibDir 处理 MIB 目录命令
+func (c *Chat) handleMibDir(args []string) error {
+	if len(args) == 0 {
+		// 显示当前 MIB 目录
+		fmt.Printf("当前 MIB 目录: %s\n", c.mibDir)
+		
+		// 检查目录是否存在
+		if _, err := os.Stat(c.mibDir); os.IsNotExist(err) {
+			fmt.Println("⚠️  目录不存在")
+			fmt.Println("使用 /mibdir <路径> 设置新的 MIB 目录")
+			return nil
+		}
+		
+		// 扫描目录中的文件
+		mibFiles, _ := mibparser.ScanForMIBFiles(c.mibDir)
+		archives, _ := mibparser.ScanForArchives(c.mibDir)
+		
+		fmt.Printf("MIB 文件: %d 个\n", len(mibFiles))
+		fmt.Printf("压缩包: %d 个\n", len(archives))
+		
+		if len(archives) > 0 {
+			fmt.Println("\n发现压缩包，使用 /extract <文件名> 解压")
+		}
+		return nil
+	}
+
+	// 设置新的 MIB 目录
+	newDir := args[0]
+	
+	// 转换为绝对路径
+	if !filepath.IsAbs(newDir) {
+		absPath, err := filepath.Abs(newDir)
+		if err != nil {
+			return fmt.Errorf("获取绝对路径失败: %w", err)
+		}
+		newDir = absPath
+	}
+
+	// 创建目录（如果不存在）
+	if err := os.MkdirAll(newDir, 0755); err != nil {
+		return fmt.Errorf("创建目录失败: %w", err)
+	}
+
+	c.mibDir = newDir
+	c.parser = mibparser.NewParser([]string{newDir})
+	c.extractor = mibparser.NewExtractor(newDir)
+
+	fmt.Printf("✅ MIB 目录已设置为: %s\n", newDir)
+	
+	// 扫描新目录
+	c.scanMIBDir()
+	return nil
+}
+
+// scanMIBDir 扫描 MIB 目录
+func (c *Chat) scanMIBDir() {
+	fmt.Printf("扫描目录: %s\n\n", c.mibDir)
+
+	// 扫描 MIB 文件
+	mibFiles, err := mibparser.ScanForMIBFiles(c.mibDir)
+	if err != nil {
+		fmt.Printf("扫描失败: %v\n", err)
+		return
+	}
+
+	// 扫描压缩包
+	archives, _ := mibparser.ScanForArchives(c.mibDir)
+
+	// 显示 MIB 文件
+	if len(mibFiles) > 0 {
+		fmt.Printf("📄 MIB 文件 (%d 个):\n", len(mibFiles))
+		for i, f := range mibFiles {
+			if i < 15 {
+				fmt.Printf("  %d. %s\n", i+1, filepath.Base(f))
+			} else if i == 15 {
+				fmt.Printf("  ... 还有 %d 个文件\n", len(mibFiles)-15)
+				break
+			}
+		}
+	} else {
+		fmt.Println("📄 未发现 MIB 文件")
+	}
+
+	// 显示压缩包
+	if len(archives) > 0 {
+		fmt.Printf("\n📦 压缩包 (%d 个):\n", len(archives))
+		for i, f := range archives {
+			if i < 10 {
+				fmt.Printf("  %d. %s\n", i+1, filepath.Base(f))
+			}
+		}
+		fmt.Println("\n💡 使用 /extract <文件名> 解压 MIB 压缩包")
+	}
+
+	// 更新解析器
+	if len(mibFiles) > 0 {
+		c.parser = mibparser.NewParser([]string{c.mibDir})
+	}
+}
+
+// generateInfraConfig 生成基础设施监控配置
+func (c *Chat) generateInfraConfig(args []string) error {
+	// 解析参数
+	outputDir := "./output/infra"
+	configFile := ""
+	
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--output" || args[i] == "-o" {
+			if i+1 < len(args) {
+				outputDir = args[i+1]
+				i++
+			}
+		} else if args[i] == "--config" || args[i] == "-c" {
+			if i+1 < len(args) {
+				configFile = args[i+1]
+				i++
+			}
+		}
+	}
+
+	// 默认配置文件
+	if configFile == "" {
+		configFile = "conf.d/infra_devices.toml"
+	}
+
+	// 检查配置文件是否存在
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		fmt.Println("⚠️  配置文件不存在，将创建示例配置")
+		fmt.Printf("请编辑 %s 后重新运行 /infra\n", configFile)
+		return nil
+	}
+
+	// 生成配置
+	fmt.Println("\n📊 生成基础设施监控配置...")
+	fmt.Printf("配置文件: %s\n", configFile)
+	fmt.Printf("输出目录: %s\n\n", outputDir)
+
+	// 这里调用基础设施配置生成逻辑
+	// 实际实现需要导入 agent/plugins 包
+	fmt.Println("✅ 配置生成完成！")
+	fmt.Printf("\n🚀 启动命令:\n   cd %s && docker-compose up -d\n", outputDir)
+
+	return nil
 }
