@@ -1,0 +1,41 @@
+[
+  {
+    "targets": [
+      "192.168.1.100"
+    ],
+    "labels": {
+      "device_tier": "core",
+      "device_type": "switch",
+      "env": "production",
+      "instance": "core-switch-01",
+      "region": "cn-east-1",
+      "vendor": "huawei"
+    }
+  },
+  {
+    "targets": [
+      "192.168.1.101"
+    ],
+    "labels": {
+      "device_tier": "core",
+      "device_type": "switch",
+      "env": "production",
+      "instance": "core-switch-02",
+      "region": "cn-east-1",
+      "vendor": "h3c"
+    }
+  },
+  {
+    "targets": [
+      "192.168.1.110"
+    ],
+    "labels": {
+      "device_tier": "access",
+      "device_type": "switch",
+      "env": "production",
+      "instance": "access-switch-01",
+      "region": "cn-east-1",
+      "vendor": "ruijie"
+    }
+  }
+]

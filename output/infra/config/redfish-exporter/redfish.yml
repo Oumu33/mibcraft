@@ -1,0 +1,19 @@
+# Redfish Exporter 配置
+# 由 mibcraft 自动生成
+
+hosts:
+  dell-r740-01:
+    username: "root"
+    password: "calvin"
+    host_address: "192.168.2.100"
+
+  hpe-dl360-01:
+    username: "Administrator"
+    password: "your-password"
+    host_address: "192.168.2.101"
+
+  lenovo-sr650-01:
+    username: "USERID"
+    password: "PASSW0RD"
+    host_address: "192.168.2.102"
+

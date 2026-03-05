@@ -1,0 +1,220 @@
+# ===================================================================
+# 基础设施监控平台 - Docker Compose 配置
+# 由 mibcraft 自动生成
+# ===================================================================
+
+version: '3.8'
+
+services:
+  # VictoriaMetrics - 时序数据库
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:latest
+    container_name: victoriametrics
+    ports:
+      - "8428:8428"
+    volumes:
+      - vmdata:/storage
+    command:
+      - "--storageDataPath=/storage"
+      - "--httpListenAddr=:8428"
+      - "--retentionPeriod=12"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # vmagent - 指标收集代理
+  vmagent:
+    image: victoriametrics/vmagent:latest
+    container_name: vmagent
+    depends_on:
+      - victoriametrics
+    ports:
+      - "8429:8429"
+    volumes:
+      - ./config/vmagent/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./config/vmagent/targets:/etc/prometheus/targets
+    command:
+      - "--promscrape.config=/etc/prometheus/prometheus.yml"
+      - "--remoteWrite.url=http://victoriametrics:8428/api/v1/write"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # vmalert - 告警规则引擎
+  vmalert:
+    image: victoriametrics/vmalert:latest
+    container_name: vmalert
+    depends_on:
+      - victoriametrics
+      - alertmanager
+    ports:
+      - "8880:8880"
+    volumes:
+      - ./config/vmalert/alerts:/etc/alerts
+    command:
+      - "--datasource.url=http://victoriametrics:8428"
+      - "--remoteRead.url=http://victoriametrics:8428"
+      - "--remoteWrite.url=http://victoriametrics:8428"
+      - "--notifier.url=http://alertmanager:9093"
+      - "--rule=/etc/alerts/*.yml"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Alertmanager - 告警管理
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Grafana - 可视化
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    depends_on:
+      - victoriametrics
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Node Exporter - Linux 节点监控
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # SNMP Exporter - SNMP 设备监控
+  snmp-exporter:
+    image: prom/snmp-exporter:latest
+    container_name: snmp-exporter
+    ports:
+      - "9116:9116"
+    volumes:
+      - ./config/snmp-exporter/snmp.yml:/etc/snmp_exporter/snmp.yml
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Blackbox Exporter - 服务可用性探测
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./config/blackbox-exporter/blackbox.yml:/etc/blackbox_exporter/config.yml
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Telegraf - VMware 监控
+  telegraf-vmware:
+    image: telegraf:latest
+    container_name: telegraf-vmware
+    depends_on:
+      - victoriametrics
+    volumes:
+      - ./config/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Telegraf - Redfish 硬件监控
+  telegraf-redfish:
+    image: telegraf:latest
+    container_name: telegraf-redfish
+    depends_on:
+      - victoriametrics
+    volumes:
+      - ./config/telegraf/telegraf-redfish.conf:/etc/telegraf/telegraf.conf:ro
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Redfish Exporter - 服务器硬件监控
+  redfish-exporter:
+    image: jenningsloy318/redfish_exporter:latest
+    container_name: redfish-exporter
+    ports:
+      - "9610:9610"
+    volumes:
+      - ./config/redfish-exporter/redfish.yml:/etc/redfish_exporter/redfish.yml:ro
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # IPMI Exporter - 老服务器硬件监控
+  ipmi-exporter:
+    image: prometheuscommunity/ipmi-exporter:latest
+    container_name: ipmi-exporter
+    ports:
+      - "9290:9290"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Loki - 日志聚合存储
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Promtail - 日志采集
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    depends_on:
+      - loki
+    volumes:
+      - /var/log:/var/log:ro
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Topology Discovery - LLDP 拓扑自动发现
+  topology-discovery:
+    build:
+      context: .
+      dockerfile: Dockerfile.topology
+    container_name: topology-discovery
+    volumes:
+      - ./config/topology/devices.yml:/etc/topology/devices.yml:ro
+      - ./data/topology:/data/topology
+    environment:
+      - DISCOVERY_INTERVAL=300
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+volumes:
+  vmdata:
+  grafana-data:
+  loki-data:
+
+networks:
+  monitoring:
+    driver: bridge

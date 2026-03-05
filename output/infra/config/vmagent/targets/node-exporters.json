@@ -1,0 +1,38 @@
+[
+  {
+    "targets": [
+      "192.168.1.10:9100"
+    ],
+    "labels": {
+      "env": "production",
+      "instance": "web-server-01",
+      "priority": "P0",
+      "region": "cn-east-1",
+      "role": "web"
+    }
+  },
+  {
+    "targets": [
+      "192.168.1.11:9100"
+    ],
+    "labels": {
+      "env": "production",
+      "instance": "db-server-01",
+      "priority": "P0",
+      "region": "cn-east-1",
+      "role": "database"
+    }
+  },
+  {
+    "targets": [
+      "192.168.1.12:9100"
+    ],
+    "labels": {
+      "env": "production",
+      "instance": "cache-server-01",
+      "priority": "P1",
+      "region": "cn-east-1",
+      "role": "cache"
+    }
+  }
+]

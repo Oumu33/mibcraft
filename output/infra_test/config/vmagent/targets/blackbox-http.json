@@ -1,0 +1,24 @@
+[
+  {
+    "targets": [
+      "https://www.example.com"
+    ],
+    "labels": {
+      "env": "production",
+      "instance": "company-website",
+      "priority": "P0",
+      "region": "cn-east-1"
+    }
+  },
+  {
+    "targets": [
+      "https://api.example.com/health"
+    ],
+    "labels": {
+      "env": "production",
+      "instance": "api-health-check",
+      "priority": "P0",
+      "region": "cn-east-1"
+    }
+  }
+]

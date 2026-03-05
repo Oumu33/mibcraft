@@ -588,6 +588,113 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 				},
 			},
 		},
+		{
+			Type: openai.ToolTypeFunction,
+			Function: openai.FunctionDefinition{
+				Name:        "generate_node_config",
+				Description: "生成 Node Exporter 主机监控配置（Linux/Windows服务器）",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"nodes": map[string]interface{}{
+							"type":        "array",
+							"description": "主机节点列表",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"name":   map[string]string{"type": "string", "description": "主机名称"},
+									"host":   map[string]string{"type": "string", "description": "IP地址"},
+									"port":   map[string]string{"type": "string", "description": "Node Exporter端口，默认9100"},
+									"labels": map[string]string{"type": "string", "description": "额外标签，如env=prod,role=web"},
+								},
+							},
+						},
+					},
+					"required": []string{"nodes"},
+				},
+			},
+		},
+		{
+			Type: openai.ToolTypeFunction,
+			Function: openai.FunctionDefinition{
+				Name:        "generate_blackbox_config",
+				Description: "生成 Blackbox Exporter 探测配置（HTTP/ICMP/TCP/DNS探测）",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"probes": map[string]interface{}{
+							"type":        "array",
+							"description": "探测目标列表",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"name":    map[string]string{"type": "string", "description": "探测名称"},
+									"target":  map[string]string{"type": "string", "description": "探测目标URL或IP"},
+									"module":  map[string]string{"type": "string", "description": "探测模块: http_2xx, http_post_2xx, icmp, tcp_connect, dns_udp"},
+									"labels":  map[string]string{"type": "string", "description": "额外标签"},
+								},
+							},
+						},
+					},
+					"required": []string{"probes"},
+				},
+			},
+		},
+		{
+			Type: openai.ToolTypeFunction,
+			Function: openai.FunctionDefinition{
+				Name:        "generate_ipmi_config",
+				Description: "生成 IPMI Exporter 物理服务器监控配置",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"devices": map[string]interface{}{
+							"type":        "array",
+							"description": "IPMI设备列表",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"name":     map[string]string{"type": "string", "description": "服务器名称"},
+									"host":     map[string]string{"type": "string", "description": "IPMI地址"},
+									"port":     map[string]string{"type": "string", "description": "IPMI端口，默认623"},
+									"username": map[string]string{"type": "string", "description": "IPMI用户名"},
+									"password": map[string]string{"type": "string", "description": "IPMI密码"},
+								},
+							},
+						},
+					},
+					"required": []string{"devices"},
+				},
+			},
+		},
+		{
+			Type: openai.ToolTypeFunction,
+			Function: openai.FunctionDefinition{
+				Name:        "generate_proxmox_config",
+				Description: "生成 Proxmox VE 虚拟化平台监控配置",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"nodes": map[string]interface{}{
+							"type":        "array",
+							"description": "Proxmox节点列表",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"name":     map[string]string{"type": "string", "description": "节点名称"},
+									"host":     map[string]string{"type": "string", "description": "API地址"},
+									"port":     map[string]string{"type": "string", "description": "API端口，默认8006"},
+									"username": map[string]string{"type": "string", "description": "用户名，如root@pam"},
+									"password": map[string]string{"type": "string", "description": "密码"},
+									"token":    map[string]string{"type": "string", "description": "API Token（可选）"},
+								},
+							},
+						},
+					},
+					"required": []string{"nodes"},
+				},
+			},
+		},
 	}
 }
 
@@ -610,6 +717,14 @@ func (c *Chat) handleToolCalls(ctx context.Context, toolCalls []openai.ToolCall)
 			result, err = c.toolGenerateNetworkConfig(toolCall.Function.Arguments)
 		case "explain_oid":
 			result, err = c.toolExplainOID(toolCall.Function.Arguments)
+		case "generate_node_config":
+			result, err = c.toolGenerateNodeConfig(toolCall.Function.Arguments)
+		case "generate_blackbox_config":
+			result, err = c.toolGenerateBlackboxConfig(toolCall.Function.Arguments)
+		case "generate_ipmi_config":
+			result, err = c.toolGenerateIPMIConfig(toolCall.Function.Arguments)
+		case "generate_proxmox_config":
+			result, err = c.toolGenerateProxmoxConfig(toolCall.Function.Arguments)
 		default:
 			result = fmt.Sprintf("未知工具: %s", toolCall.Function.Name)
 		}
@@ -1106,4 +1221,314 @@ func (c *Chat) generateInfraConfig(args []string) error {
 	fmt.Printf("\n🚀 启动命令:\n   cd %s && docker-compose up -d\n", outputDir)
 
 	return nil
+}
+
+// toolGenerateNodeConfig 生成 Node Exporter 配置
+func (c *Chat) toolGenerateNodeConfig(args string) (string, error) {
+	var params struct {
+		Nodes []struct {
+			Name   string `json:"name"`
+			Host   string `json:"host"`
+			Port   string `json:"port"`
+			Labels string `json:"labels"`
+		} `json:"nodes"`
+	}
+
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", fmt.Errorf("解析参数失败: %w", err)
+	}
+
+	outputDir := "./output/infra/config/vmagent/targets"
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("创建目录失败: %w", err)
+	}
+
+	// 生成 File SD 配置
+	var targets []map[string]interface{}
+	for _, node := range params.Nodes {
+		port := node.Port
+		if port == "" {
+			port = "9100"
+		}
+
+		target := map[string]interface{}{
+			"targets": []string{fmt.Sprintf("%s:%s", node.Host, port)},
+			"labels": map[string]string{
+				"job":    "node-exporter",
+				"instance": node.Name,
+				"host":   node.Host,
+			},
+		}
+
+		// 解析额外标签
+		if node.Labels != "" {
+			for _, label := range strings.Split(node.Labels, ",") {
+				parts := strings.SplitN(strings.TrimSpace(label), "=", 2)
+				if len(parts) == 2 {
+					target["labels"].(map[string]string)[parts[0]] = parts[1]
+				}
+			}
+		}
+
+		targets = append(targets, target)
+	}
+
+	data, err := json.MarshalIndent(targets, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("生成 JSON 失败: %w", err)
+	}
+
+	outputPath := filepath.Join(outputDir, "node-exporters.json")
+	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+		return "", fmt.Errorf("写入文件失败: %w", err)
+	}
+
+	return fmt.Sprintf("✅ Node Exporter 配置已生成: %s\n包含 %d 个节点", outputPath, len(params.Nodes)), nil
+}
+
+// toolGenerateBlackboxConfig 生成 Blackbox Exporter 配置
+func (c *Chat) toolGenerateBlackboxConfig(args string) (string, error) {
+	var params struct {
+		Probes []struct {
+			Name    string `json:"name"`
+			Target  string `json:"target"`
+			Module  string `json:"module"`
+			Labels  string `json:"labels"`
+		} `json:"probes"`
+	}
+
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", fmt.Errorf("解析参数失败: %w", err)
+	}
+
+	outputDir := "./output/infra/config/vmagent/targets"
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("创建目录失败: %w", err)
+	}
+
+	// 分类处理不同探测类型
+	httpTargets := []map[string]interface{}{}
+	icmpTargets := []map[string]interface{}{}
+	tcpTargets := []map[string]interface{}{}
+
+	for _, probe := range params.Probes {
+		module := probe.Module
+		if module == "" {
+			module = "http_2xx"
+		}
+
+		target := map[string]interface{}{
+			"targets": []string{probe.Target},
+			"labels": map[string]string{
+				"job":    "blackbox",
+				"module": module,
+				"probe":  probe.Name,
+			},
+		}
+
+		// 解析额外标签
+		if probe.Labels != "" {
+			for _, label := range strings.Split(probe.Labels, ",") {
+				parts := strings.SplitN(strings.TrimSpace(label), "=", 2)
+				if len(parts) == 2 {
+					target["labels"].(map[string]string)[parts[0]] = parts[1]
+				}
+			}
+		}
+
+		switch {
+		case strings.HasPrefix(module, "http"):
+			httpTargets = append(httpTargets, target)
+		case strings.HasPrefix(module, "icmp"):
+			icmpTargets = append(icmpTargets, target)
+		case strings.HasPrefix(module, "tcp"):
+			tcpTargets = append(tcpTargets, target)
+		default:
+			httpTargets = append(httpTargets, target)
+		}
+	}
+
+	var results []string
+
+	// 写入 HTTP 探测配置
+	if len(httpTargets) > 0 {
+		data, _ := json.MarshalIndent(httpTargets, "", "  ")
+		path := filepath.Join(outputDir, "blackbox-http.json")
+		os.WriteFile(path, data, 0644)
+		results = append(results, fmt.Sprintf("HTTP 探测: %d 个 -> %s", len(httpTargets), path))
+	}
+
+	// 写入 ICMP 探测配置
+	if len(icmpTargets) > 0 {
+		data, _ := json.MarshalIndent(icmpTargets, "", "  ")
+		path := filepath.Join(outputDir, "blackbox-icmp.json")
+		os.WriteFile(path, data, 0644)
+		results = append(results, fmt.Sprintf("ICMP 探测: %d 个 -> %s", len(icmpTargets), path))
+	}
+
+	// 写入 TCP 探测配置
+	if len(tcpTargets) > 0 {
+		data, _ := json.MarshalIndent(tcpTargets, "", "  ")
+		path := filepath.Join(outputDir, "blackbox-tcp.json")
+		os.WriteFile(path, data, 0644)
+		results = append(results, fmt.Sprintf("TCP 探测: %d 个 -> %s", len(tcpTargets), path))
+	}
+
+	return fmt.Sprintf("✅ Blackbox Exporter 配置已生成:\n%s", strings.Join(results, "\n")), nil
+}
+
+// toolGenerateIPMIConfig 生成 IPMI Exporter 配置
+func (c *Chat) toolGenerateIPMIConfig(args string) (string, error) {
+	var params struct {
+		Devices []struct {
+			Name     string `json:"name"`
+			Host     string `json:"host"`
+			Port     string `json:"port"`
+			Username string `json:"username"`
+			Password string `json:"password"`
+		} `json:"devices"`
+	}
+
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", fmt.Errorf("解析参数失败: %w", err)
+	}
+
+	outputDir := "./output/infra/config/vmagent/targets"
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("创建目录失败: %w", err)
+	}
+
+	// 生成 File SD 配置
+	var targets []map[string]interface{}
+	for _, device := range params.Devices {
+		port := device.Port
+		if port == "" {
+			port = "9290"
+		}
+
+		target := map[string]interface{}{
+			"targets": []string{fmt.Sprintf("%s:%s", device.Host, port)},
+			"labels": map[string]string{
+				"job":      "ipmi",
+				"instance": device.Name,
+			},
+		}
+
+		targets = append(targets, target)
+	}
+
+	data, err := json.MarshalIndent(targets, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("生成 JSON 失败: %w", err)
+	}
+
+	outputPath := filepath.Join(outputDir, "ipmi-devices.json")
+	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+		return "", fmt.Errorf("写入文件失败: %w", err)
+	}
+
+	// 生成 Telegraf IPMI 配置
+	telegrafConfig := `# IPMI 监控配置
+[[inputs.ipmi_sensor]]
+  ## IPMI 设备列表
+  # servers = ["USERID:PASSW0RD@lan(192.168.1.1)"]
+  
+  ## 采集间隔
+  interval = "30s"
+  
+  ## 超时设置
+  timeout = "20s"
+`
+
+	for _, device := range params.Devices {
+		username := device.Username
+		if username == "" {
+			username = "ADMIN"
+		}
+		password := device.Password
+		if password == "" {
+			password = "ADMIN"
+		}
+		telegrafConfig += fmt.Sprintf("  servers = [\"%s:%s@lan(%s)\"]\n", username, password, device.Host)
+	}
+
+	telegrafPath := "./output/infra/config/telegraf/telegraf-ipmi.conf"
+	os.WriteFile(telegrafPath, []byte(telegrafConfig), 0644)
+
+	return fmt.Sprintf("✅ IPMI Exporter 配置已生成:\n- File SD: %s\n- Telegraf: %s\n包含 %d 台服务器", outputPath, telegrafPath, len(params.Devices)), nil
+}
+
+// toolGenerateProxmoxConfig 生成 Proxmox VE 配置
+func (c *Chat) toolGenerateProxmoxConfig(args string) (string, error) {
+	var params struct {
+		Nodes []struct {
+			Name     string `json:"name"`
+			Host     string `json:"host"`
+			Port     string `json:"port"`
+			Username string `json:"username"`
+			Password string `json:"password"`
+			Token    string `json:"token"`
+		} `json:"nodes"`
+	}
+
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", fmt.Errorf("解析参数失败: %w", err)
+	}
+
+	outputDir := "./output/infra/config"
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("创建目录失败: %w", err)
+	}
+
+	// 生成 Proxmox Exporter 环境变量
+	envContent := "# Proxmox VE Exporter 配置\n"
+	for _, node := range params.Nodes {
+		port := node.Port
+		if port == "" {
+			port = "8006"
+		}
+
+		envContent += fmt.Sprintf("\n# %s\n", node.Name)
+		envContent += fmt.Sprintf("PROXMOX_HOST_%s=%s\n", strings.ToUpper(node.Name), node.Host)
+		envContent += fmt.Sprintf("PROXMOX_PORT_%s=%s\n", strings.ToUpper(node.Name), port)
+
+		if node.Token != "" {
+			envContent += fmt.Sprintf("PROXMOX_TOKEN_%s=%s\n", strings.ToUpper(node.Name), node.Token)
+		} else {
+			username := node.Username
+			if username == "" {
+				username = "root@pam"
+			}
+			envContent += fmt.Sprintf("PROXMOX_USER_%s=%s\n", strings.ToUpper(node.Name), username)
+			envContent += fmt.Sprintf("PROXMOX_PASSWORD_%s=%s\n", strings.ToUpper(node.Name), node.Password)
+		}
+	}
+
+	envPath := filepath.Join(outputDir, "proxmox.env")
+	if err := os.WriteFile(envPath, []byte(envContent), 0644); err != nil {
+		return "", fmt.Errorf("写入文件失败: %w", err)
+	}
+
+	// 生成 Prometheus Scrape 配置
+	scrapeConfig := fmt.Sprintf(`
+  - job_name: 'proxmox'
+    static_configs:
+      - targets:
+%s
+    metrics_path: /pve
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+`, func() string {
+		var targets []string
+		for _, node := range params.Nodes {
+			targets = append(targets, fmt.Sprintf("        - '%s:9221'", node.Name))
+		}
+		return strings.Join(targets, "\n")
+	}())
+
+	scrapePath := filepath.Join(outputDir, "proxmox-scrape.yml")
+	os.WriteFile(scrapePath, []byte(scrapeConfig), 0644)
+
+	return fmt.Sprintf("✅ Proxmox VE 配置已生成:\n- 环境变量: %s\n- Scrape 配置: %s\n包含 %d 个节点", envPath, scrapePath, len(params.Nodes)), nil
 }
