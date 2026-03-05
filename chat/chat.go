@@ -416,17 +416,28 @@ func (c *Chat) handleNaturalLanguage(ctx context.Context, input string) error {
 func (c *Chat) buildSystemPrompt() string {
 	var sb strings.Builder
 	
-	sb.WriteString("你是一个 SNMP 配置生成助手。你的任务是帮助用户解析 MIB 文件并生成配置。\n\n")
+	sb.WriteString("你是一个基础设施监控配置生成助手。你的任务是帮助用户生成各种监控配置。\n\n")
 	sb.WriteString("你可以:\n")
-	sb.WriteString("1. 搜索 MIB 对象\n")
-	sb.WriteString("2. 生成 Categraf TOML 配置\n")
-	sb.WriteString("3. 生成 SNMP Exporter YAML 配置\n")
-	sb.WriteString("4. 解释 OID 含义\n\n")
+	sb.WriteString("1. 搜索 MIB 对象并生成 SNMP 配置\n")
+	sb.WriteString("2. 生成 Categraf/SNMP Exporter/Telegraf 配置\n")
+	sb.WriteString("3. 生成物理服务器硬件监控配置（Dell iDRAC/HPE iLO/Lenovo/Supermicro）\n")
+	sb.WriteString("4. 生成虚拟化平台监控配置（VMware vSphere/Proxmox）\n")
+	sb.WriteString("5. 生成网络设备监控配置（华为/华三/Cisco/锐捷等）\n")
+	sb.WriteString("6. 生成服务探测配置（HTTP/ICMP/TCP）\n")
+	sb.WriteString("7. 解释 OID 含义\n\n")
 	
-	// 添加可用工具说明
+	sb.WriteString("支持的设备类型:\n")
+	sb.WriteString("- 网络设备: 华为(NDP)、华三(LNP)、Cisco(CDP)、锐捷、Juniper、Arista 等\n")
+	sb.WriteString("- 物理服务器: Dell iDRAC、HPE iLO、Lenovo XClarity、Supermicro IPMI、Fujitsu\n")
+	sb.WriteString("- 虚拟化: VMware vSphere、Proxmox VE\n")
+	sb.WriteString("- 老旧服务器: IPMI 2.0 通用\n\n")
+	
 	sb.WriteString("可用工具:\n")
 	sb.WriteString("- search_mib: 搜索 MIB 对象\n")
-	sb.WriteString("- generate_config: 生成配置文件\n")
+	sb.WriteString("- generate_config: 生成 SNMP 配置文件\n")
+	sb.WriteString("- generate_hardware_config: 生成服务器硬件监控配置\n")
+	sb.WriteString("- generate_vmware_config: 生成 VMware 监控配置\n")
+	sb.WriteString("- generate_network_config: 生成网络设备监控配置\n")
 	sb.WriteString("- explain_oid: 解释 OID 含义\n")
 	
 	return sb.String()
@@ -456,7 +467,7 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "generate_config",
-				Description: "生成 SNMP 采集配置文件",
+				Description: "生成 SNMP 采集配置文件（Categraf/SNMP Exporter）",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -472,6 +483,91 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 						},
 					},
 					"required": []string{"oids"},
+				},
+			},
+		},
+		{
+			Type: openai.ToolTypeFunction,
+			Function: openai.FunctionDefinition{
+				Name:        "generate_hardware_config",
+				Description: "生成服务器硬件监控配置（Redfish/IPMI），支持 Dell、HPE、Lenovo、Supermicro、Fujitsu",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"device_type": map[string]interface{}{
+							"type":        "string",
+							"enum":        []string{"redfish", "ipmi"},
+							"description": "设备类型: redfish(新服务器) 或 ipmi(老服务器)",
+						},
+						"devices": map[string]interface{}{
+							"type":        "array",
+							"description": "设备列表",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"name":     map[string]string{"type": "string", "description": "设备名称"},
+									"host":     map[string]string{"type": "string", "description": "IP地址"},
+									"username": map[string]string{"type": "string", "description": "用户名"},
+									"password": map[string]string{"type": "string", "description": "密码"},
+									"vendor":   map[string]string{"type": "string", "description": "厂商: dell_idrac, hpe_ilo, lenovo, supermicro, generic"},
+								},
+							},
+						},
+					},
+					"required": []string{"device_type", "devices"},
+				},
+			},
+		},
+		{
+			Type: openai.ToolTypeFunction,
+			Function: openai.FunctionDefinition{
+				Name:        "generate_vmware_config",
+				Description: "生成 VMware vSphere 监控配置（vCenter/ESXi）",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"vcenters": map[string]interface{}{
+							"type":        "array",
+							"description": "vCenter 列表",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"name":     map[string]string{"type": "string", "description": "vCenter名称"},
+									"url":      map[string]string{"type": "string", "description": "vCenter URL (https://host/sdk)"},
+									"username": map[string]string{"type": "string", "description": "用户名"},
+									"password": map[string]string{"type": "string", "description": "密码"},
+								},
+							},
+						},
+					},
+					"required": []string{"vcenters"},
+				},
+			},
+		},
+		{
+			Type: openai.ToolTypeFunction,
+			Function: openai.FunctionDefinition{
+				Name:        "generate_network_config",
+				Description: "生成网络设备监控配置（SNMP），支持华为、华三、Cisco、锐捷等",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"devices": map[string]interface{}{
+							"type":        "array",
+							"description": "网络设备列表",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"name":        map[string]string{"type": "string", "description": "设备名称"},
+									"host":        map[string]string{"type": "string", "description": "IP地址"},
+									"vendor":      map[string]string{"type": "string", "description": "厂商: huawei, h3c, cisco, ruijie, juniper, hpe"},
+									"device_tier": map[string]string{"type": "string", "description": "网络层级: core, aggregation, access"},
+									"community":   map[string]string{"type": "string", "description": "SNMP团体字符串"},
+								},
+							},
+						},
+					},
+					"required": []string{"devices"},
 				},
 			},
 		},
@@ -506,6 +602,12 @@ func (c *Chat) handleToolCalls(ctx context.Context, toolCalls []openai.ToolCall)
 			result, err = c.toolSearchMIB(toolCall.Function.Arguments)
 		case "generate_config":
 			result, err = c.toolGenerateConfig(ctx, toolCall.Function.Arguments)
+		case "generate_hardware_config":
+			result, err = c.toolGenerateHardwareConfig(toolCall.Function.Arguments)
+		case "generate_vmware_config":
+			result, err = c.toolGenerateVMwareConfig(toolCall.Function.Arguments)
+		case "generate_network_config":
+			result, err = c.toolGenerateNetworkConfig(toolCall.Function.Arguments)
 		case "explain_oid":
 			result, err = c.toolExplainOID(toolCall.Function.Arguments)
 		default:
@@ -624,6 +726,173 @@ func (c *Chat) toolExplainOID(args string) (string, error) {
 	}
 	
 	return "未找到该 OID 的定义", nil
+}
+
+// toolGenerateHardwareConfig 生成硬件监控配置工具
+func (c *Chat) toolGenerateHardwareConfig(args string) (string, error) {
+	var params struct {
+		DeviceType string `json:"device_type"`
+		Devices    []struct {
+			Name     string `json:"name"`
+			Host     string `json:"host"`
+			Username string `json:"username"`
+			Password string `json:"password"`
+			Vendor   string `json:"vendor"`
+		} `json:"devices"`
+	}
+	
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", err
+	}
+	
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("=== %s 硬件监控配置 ===\n\n", strings.ToUpper(params.DeviceType)))
+	
+	if params.DeviceType == "redfish" {
+		sb.WriteString("# Telegraf Redfish 配置\n")
+		sb.WriteString("# 由 AI 助手生成\n\n")
+		sb.WriteString("[[inputs.redfish]]\n")
+		sb.WriteString("  interval = \"60s\"\n\n")
+		
+		for _, dev := range params.Devices {
+			sb.WriteString(fmt.Sprintf("  [[inputs.redfish.server]]\n"))
+			sb.WriteString(fmt.Sprintf("    name = \"%s\"\n", dev.Name))
+			sb.WriteString(fmt.Sprintf("    address = \"https://%s\"\n", dev.Host))
+			sb.WriteString(fmt.Sprintf("    username = \"%s\"\n", dev.Username))
+			sb.WriteString(fmt.Sprintf("    password = \"%s\"\n", dev.Password))
+			sb.WriteString("    insecure_skip_verify = true\n")
+			sb.WriteString("    include_metrics = [\"thermal\", \"power\", \"system\", \"storage\"]\n")
+			if dev.Vendor != "" {
+				sb.WriteString(fmt.Sprintf("    [inputs.redfish.server.tags]\n"))
+				sb.WriteString(fmt.Sprintf("      vendor = \"%s\"\n", dev.Vendor))
+			}
+			sb.WriteString("\n")
+		}
+	} else if params.DeviceType == "ipmi" {
+		sb.WriteString("# Telegraf IPMI 配置\n")
+		sb.WriteString("# 由 AI 助手生成\n\n")
+		sb.WriteString("[[inputs.ipmi_sensor]]\n")
+		sb.WriteString("  interval = \"60s\"\n")
+		sb.WriteString("  metric_version = 2\n\n")
+		
+		for _, dev := range params.Devices {
+			sb.WriteString(fmt.Sprintf("  [[inputs.ipmi_sensor.server]]\n"))
+			sb.WriteString(fmt.Sprintf("    host = \"%s\"\n", dev.Host))
+			sb.WriteString(fmt.Sprintf("    username = \"%s\"\n", dev.Username))
+			sb.WriteString(fmt.Sprintf("    password = \"%s\"\n", dev.Password))
+			sb.WriteString("    interface = \"lanplus\"\n")
+			sb.WriteString("    port = 623\n\n")
+		}
+	}
+	
+	sb.WriteString("\n💡 将配置添加到 telegraf.conf 或 telegraf-ipmi.conf 中")
+	return sb.String(), nil
+}
+
+// toolGenerateVMwareConfig 生成 VMware 监控配置工具
+func (c *Chat) toolGenerateVMwareConfig(args string) (string, error) {
+	var params struct {
+		VCenters []struct {
+			Name     string `json:"name"`
+			URL      string `json:"url"`
+			Username string `json:"username"`
+			Password string `json:"password"`
+		} `json:"vcenters"`
+	}
+	
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", err
+	}
+	
+	var sb strings.Builder
+	sb.WriteString("=== VMware vSphere 监控配置 ===\n\n")
+	sb.WriteString("# Telegraf VMware 配置\n")
+	sb.WriteString("# 由 AI 助手生成\n\n")
+	sb.WriteString("[[inputs.vsphere]]\n")
+	sb.WriteString("  interval = \"60s\"\n")
+	sb.WriteString("  timeout = \"60s\"\n\n")
+	
+	for _, vc := range params.VCenters {
+		sb.WriteString(fmt.Sprintf("  # vCenter: %s\n", vc.Name))
+		sb.WriteString(fmt.Sprintf("  vcenters = [\"%s\"]\n", vc.URL))
+		sb.WriteString(fmt.Sprintf("  username = \"%s\"\n", vc.Username))
+		sb.WriteString(fmt.Sprintf("  password = \"%s\"\n", vc.Password))
+		sb.WriteString("  insecure_skip_verify = true\n\n")
+	}
+	
+	sb.WriteString("  # 虚拟机指标\n")
+	sb.WriteString("  vm_metric_include = [\n")
+	sb.WriteString("    \"cpu.usage.average\",\n")
+	sb.WriteString("    \"mem.usage.average\",\n")
+	sb.WriteString("    \"disk.usage.average\",\n")
+	sb.WriteString("    \"net.usage.average\",\n")
+	sb.WriteString("  ]\n\n")
+	
+	sb.WriteString("  # ESXi 主机指标\n")
+	sb.WriteString("  host_metric_include = [\n")
+	sb.WriteString("    \"cpu.usage.average\",\n")
+	sb.WriteString("    \"mem.usage.average\",\n")
+	sb.WriteString("  ]\n")
+	
+	sb.WriteString("\n💡 将配置添加到 telegraf.conf 中")
+	return sb.String(), nil
+}
+
+// toolGenerateNetworkConfig 生成网络设备监控配置工具
+func (c *Chat) toolGenerateNetworkConfig(args string) (string, error) {
+	var params struct {
+		Devices []struct {
+			Name        string `json:"name"`
+			Host        string `json:"host"`
+			Vendor      string `json:"vendor"`
+			DeviceTier  string `json:"device_tier"`
+			Community   string `json:"community"`
+		} `json:"devices"`
+	}
+	
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", err
+	}
+	
+	var sb strings.Builder
+	sb.WriteString("=== 网络设备 SNMP 监控配置 ===\n\n")
+	
+	// 生成 vmagent File SD JSON
+	sb.WriteString("# vmagent File SD 目标 (snmp-devices.json)\n")
+	sb.WriteString("[\n")
+	
+	for i, dev := range params.Devices {
+		community := dev.Community
+		if community == "" {
+			community = "public"
+		}
+		
+		sb.WriteString("  {\n")
+		sb.WriteString(fmt.Sprintf("    \"targets\": [\"%s\"],\n", dev.Host))
+		sb.WriteString("    \"labels\": {\n")
+		sb.WriteString(fmt.Sprintf("      \"instance\": \"%s\",\n", dev.Name))
+		sb.WriteString(fmt.Sprintf("      \"device_type\": \"switch\",\n"))
+		if dev.DeviceTier != "" {
+			sb.WriteString(fmt.Sprintf("      \"device_tier\": \"%s\",\n", dev.DeviceTier))
+		}
+		if dev.Vendor != "" {
+			sb.WriteString(fmt.Sprintf("      \"vendor\": \"%s\",\n", dev.Vendor))
+		}
+		sb.WriteString("      \"env\": \"production\"\n")
+		sb.WriteString("    }\n")
+		if i < len(params.Devices)-1 {
+			sb.WriteString("  },\n")
+		} else {
+			sb.WriteString("  }\n")
+		}
+	}
+	
+	sb.WriteString("]\n\n")
+	
+	sb.WriteString("💡 将此 JSON 保存到 config/vmagent/targets/snmp-devices.json\n")
+	sb.WriteString("💡 vmagent 会自动加载并开始采集")
+	
+	return sb.String(), nil
 }
 
 // getModelName 获取模型名称
