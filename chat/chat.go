@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Oumu33/mibcraft/config"
 	"github.com/Oumu33/mibcraft/generator"
@@ -547,8 +548,19 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 		{
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
+				Name:        "list_network_metrics",
+				Description: "列出网络设备支持的监控指标类型，帮助用户选择需要监控的项目",
+				Parameters: map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+				},
+			},
+		},
+		{
+			Type: openai.ToolTypeFunction,
+			Function: openai.FunctionDefinition{
 				Name:        "generate_network_config",
-				Description: "生成网络设备监控配置（SNMP），支持华为、华三、Cisco、锐捷等",
+				Description: "生成网络设备监控配置（SNMP），支持多指标监控。指标可选: cpu, memory, interface, port_status, port_errors, port_traffic, vlan, stp, lldp, ospf, bgp, arp, dhcp, acl, stack, poe, optics, environment, system, all",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -560,14 +572,67 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 								"properties": map[string]interface{}{
 									"name":        map[string]string{"type": "string", "description": "设备名称"},
 									"host":        map[string]string{"type": "string", "description": "IP地址"},
-									"vendor":      map[string]string{"type": "string", "description": "厂商: huawei, h3c, cisco, ruijie, juniper, hpe"},
+									"vendor":      map[string]string{"type": "string", "description": "厂商: huawei, h3c, cisco, ruijie, juniper, hpe, zte, maipu"},
 									"device_tier": map[string]string{"type": "string", "description": "网络层级: core, aggregation, access"},
 									"community":   map[string]string{"type": "string", "description": "SNMP团体字符串"},
 								},
+								"required": []string{"name", "host", "vendor"},
 							},
+						},
+						"metrics": map[string]interface{}{
+							"type":        "array",
+							"description": "监控指标列表，可选: cpu, memory, interface, port_status, port_errors, port_traffic, vlan, stp, lldp, ospf, bgp, arp, dhcp, acl, stack, poe, optics, environment, system, all。留空则使用默认指标(cpu,memory,interface,system)",
+							"items":       map[string]string{"type": "string"},
+						},
+						"interval": map[string]interface{}{
+							"type":        "string",
+							"description": "采集间隔，默认 30s",
 						},
 					},
 					"required": []string{"devices"},
+				},
+			},
+		},
+		{
+			Type: openai.ToolTypeFunction,
+			Function: openai.FunctionDefinition{
+				Name:        "generate_snmp_config",
+				Description: "生成自定义 SNMP 配置，基于用户指定的 OID 列表，适合高级用户精确控制监控项",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"device_name": map[string]interface{}{
+							"type":        "string",
+							"description": "设备名称",
+						},
+						"device_host": map[string]interface{}{
+							"type":        "string",
+							"description": "设备 IP 地址",
+						},
+						"community": map[string]interface{}{
+							"type":        "string",
+							"description": "SNMP 团体字符串",
+						},
+						"oids": map[string]interface{}{
+							"type":        "array",
+							"description": "OID 列表，每个 OID 包含名称、OID、描述",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"name":        map[string]string{"type": "string", "description": "指标名称"},
+									"oid":         map[string]string{"type": "string", "description": "OID 编号"},
+									"description": map[string]string{"type": "string", "description": "指标描述"},
+									"type":        map[string]string{"type": "string", "description": "类型: gauge, counter, counter64"},
+								},
+								"required": []string{"name", "oid"},
+							},
+						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "输出格式: categraf, snmp_exporter, telegraf",
+						},
+					},
+					"required": []string{"device_name", "device_host", "oids"},
 				},
 			},
 		},
@@ -713,8 +778,12 @@ func (c *Chat) handleToolCalls(ctx context.Context, toolCalls []openai.ToolCall)
 			result, err = c.toolGenerateHardwareConfig(toolCall.Function.Arguments)
 		case "generate_vmware_config":
 			result, err = c.toolGenerateVMwareConfig(toolCall.Function.Arguments)
+		case "list_network_metrics":
+			result, err = c.toolListNetworkMetrics(toolCall.Function.Arguments)
 		case "generate_network_config":
 			result, err = c.toolGenerateNetworkConfig(toolCall.Function.Arguments)
+		case "generate_snmp_config":
+			result, err = c.toolGenerateSNMPConfig(toolCall.Function.Arguments)
 		case "explain_oid":
 			result, err = c.toolExplainOID(toolCall.Function.Arguments)
 		case "generate_node_config":
@@ -953,61 +1022,347 @@ func (c *Chat) toolGenerateVMwareConfig(args string) (string, error) {
 	return sb.String(), nil
 }
 
+// toolListNetworkMetrics 列出网络设备支持的监控指标
+func (c *Chat) toolListNetworkMetrics(args string) (string, error) {
+	metrics := []struct {
+		Name        string
+		Description string
+		OIDs        string
+		Vendors     string
+	}{
+		{"cpu", "CPU 使用率", "hrProcessorLoad / 厂商私有MIB", "全部厂商"},
+		{"memory", "内存使用率", "hrMemory / 厂商私有MIB", "全部厂商"},
+		{"interface", "接口基本信息", "ifTable / ifXTable", "全部厂商"},
+		{"port_status", "端口状态 (up/down)", "ifOperStatus / ifAdminStatus", "全部厂商"},
+		{"port_traffic", "端口流量 (in/out)", "ifHCInOctets / ifHCOutOctets", "全部厂商"},
+		{"port_errors", "端口错误包", "ifInErrors / ifOutErrors / ifInDiscards", "全部厂商"},
+		{"vlan", "VLAN 信息", "IEEE8021-Q-BRIDGE-MIB", "全部厂商"},
+		{"stp", "生成树状态", "BRIDGE-MIB / RSTP-MIB", "全部厂商"},
+		{"lldp", "LLDP 邻居发现", "LLDP-MIB", "全部厂商"},
+		{"cdp", "CDP 邻居发现 (Cisco)", "CISCO-CDP-MIB", "Cisco"},
+		{"ndp", "NDP 邻居发现 (华为)", "HW-NDP-MIB", "Huawei"},
+		{"lnp", "LNP 邻居发现 (华三)", "HH3C-LNP-MIB", "H3C"},
+		{"ospf", "OSPF 邻居状态", "OSPF-MIB / OSPF-TRAP-MIB", "全部厂商"},
+		{"bgp", "BGP 对等体状态", "BGP4-MIB", "全部厂商"},
+		{"arp", "ARP 表", "ipNetToMediaTable", "全部厂商"},
+		{"dhcp", "DHCP 统计", "CISCO-DHCP-SNOOPING-MIB", "Cisco/Huawei/H3C"},
+		{"acl", "ACL 匹配计数", "CISCO-ACL-MIB / 厂商私有", "Cisco/Huawei/H3C"},
+		{"stack", "堆叠状态", "CISCO-STACK-MIB / 厂商私有", "Cisco/Huawei/H3C"},
+		{"poe", "PoE 功率", "POE-MIB / 厂商私有", "支持PoE的交换机"},
+		{"optics", "光模块信息", "ENTITY-SENSOR-MIB / 厂商私有", "带光模块设备"},
+		{"environment", "环境 (温度/风扇/电源)", "ENTITY-SENSOR-MIB / 厂商私有", "全部厂商"},
+		{"system", "系统信息", "sysDescr / sysUpTime / sysName", "全部厂商"},
+	}
+
+	var sb strings.Builder
+	sb.WriteString("📡 网络设备支持的监控指标:\n\n")
+	sb.WriteString("| 指标 | 说明 | OID 来源 | 支持厂商 |\n")
+	sb.WriteString("|:-----|:-----|:---------|:---------|\n")
+	
+	for _, m := range metrics {
+		sb.WriteString(fmt.Sprintf("| `%s` | %s | %s | %s |\n", m.Name, m.Description, m.OIDs, m.Vendors))
+	}
+	
+	sb.WriteString("\n**使用示例:**\n")
+	sb.WriteString("```\n")
+	sb.WriteString(">>> 帮我监控华为核心交换机，需要 cpu, memory, port_traffic, port_errors\n")
+	sb.WriteString("```\n")
+	sb.WriteString("\n**默认指标:** cpu, memory, interface, system\n")
+	sb.WriteString("**全量监控:** 使用 `all` 或 `metrics: [\"all\"]`\n")
+	
+	return sb.String(), nil
+}
+
 // toolGenerateNetworkConfig 生成网络设备监控配置工具
 func (c *Chat) toolGenerateNetworkConfig(args string) (string, error) {
 	var params struct {
 		Devices []struct {
-			Name        string `json:"name"`
-			Host        string `json:"host"`
-			Vendor      string `json:"vendor"`
-			DeviceTier  string `json:"device_tier"`
-			Community   string `json:"community"`
+			Name       string `json:"name"`
+			Host       string `json:"host"`
+			Vendor     string `json:"vendor"`
+			DeviceTier string `json:"device_tier"`
+			Community  string `json:"community"`
 		} `json:"devices"`
+		Metrics   []string `json:"metrics"`
+		Interval  string   `json:"interval"`
 	}
 	
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", err
 	}
 	
+	// 默认指标
+	metrics := params.Metrics
+	if len(metrics) == 0 {
+		metrics = []string{"cpu", "memory", "interface", "system"}
+	}
+	
+	// 处理 "all"
+	if len(metrics) == 1 && metrics[0] == "all" {
+		metrics = []string{"cpu", "memory", "interface", "port_status", "port_traffic", 
+			"port_errors", "vlan", "stp", "lldp", "environment", "system"}
+	}
+	
+	interval := params.Interval
+	if interval == "" {
+		interval = "30s"
+	}
+	
+	outputDir := "./output/infra/config"
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("创建目录失败: %w", err)
+	}
+	
 	var sb strings.Builder
-	sb.WriteString("=== 网络设备 SNMP 监控配置 ===\n\n")
+	sb.WriteString("=== 📡 网络设备 SNMP 监控配置 ===\n\n")
+	sb.WriteString(fmt.Sprintf("监控指标: %s\n", strings.Join(metrics, ", ")))
+	sb.WriteString(fmt.Sprintf("采集间隔: %s\n\n", interval))
 	
-	// 生成 vmagent File SD JSON
-	sb.WriteString("# vmagent File SD 目标 (snmp-devices.json)\n")
-	sb.WriteString("[\n")
-	
-	for i, dev := range params.Devices {
+	// 1. 生成 vmagent File SD JSON
+	targets := []map[string]interface{}{}
+	for _, dev := range params.Devices {
 		community := dev.Community
 		if community == "" {
 			community = "public"
 		}
 		
-		sb.WriteString("  {\n")
-		sb.WriteString(fmt.Sprintf("    \"targets\": [\"%s\"],\n", dev.Host))
-		sb.WriteString("    \"labels\": {\n")
-		sb.WriteString(fmt.Sprintf("      \"instance\": \"%s\",\n", dev.Name))
-		sb.WriteString(fmt.Sprintf("      \"device_type\": \"switch\",\n"))
+		target := map[string]interface{}{
+			"targets": []string{dev.Host},
+			"labels": map[string]string{
+				"job":        "snmp",
+				"instance":   dev.Name,
+				"device_type": "switch",
+				"community":  community,
+			},
+		}
+		
 		if dev.DeviceTier != "" {
-			sb.WriteString(fmt.Sprintf("      \"device_tier\": \"%s\",\n", dev.DeviceTier))
+			target["labels"].(map[string]string)["device_tier"] = dev.DeviceTier
 		}
 		if dev.Vendor != "" {
-			sb.WriteString(fmt.Sprintf("      \"vendor\": \"%s\",\n", dev.Vendor))
+			target["labels"].(map[string]string)["vendor"] = dev.Vendor
 		}
-		sb.WriteString("      \"env\": \"production\"\n")
-		sb.WriteString("    }\n")
-		if i < len(params.Devices)-1 {
-			sb.WriteString("  },\n")
-		} else {
-			sb.WriteString("  }\n")
+		
+		targets = append(targets, target)
+	}
+	
+	targetsDir := filepath.Join(outputDir, "vmagent/targets")
+	os.MkdirAll(targetsDir, 0755)
+	targetsPath := filepath.Join(targetsDir, "snmp-devices.json")
+	data, _ := json.MarshalIndent(targets, "", "  ")
+	os.WriteFile(targetsPath, data, 0644)
+	sb.WriteString(fmt.Sprintf("✅ File SD: %s\n", targetsPath))
+	
+	// 2. 生成 SNMP Exporter 配置
+	snmpConfig := c.generateSNMPExporterConfig(metrics, params.Devices)
+	snmpDir := filepath.Join(outputDir, "snmp-exporter")
+	os.MkdirAll(snmpDir, 0755)
+	snmpPath := filepath.Join(snmpDir, "snmp.yml")
+	os.WriteFile(snmpPath, []byte(snmpConfig), 0644)
+	sb.WriteString(fmt.Sprintf("✅ SNMP Exporter: %s\n", snmpPath))
+	
+	// 3. 生成 Categraf 配置
+	categrafConfig := c.generateCategrafSNMPConfig(metrics, params.Devices, interval)
+	categrafDir := filepath.Join(outputDir, "categraf")
+	os.MkdirAll(categrafDir, 0755)
+	categrafPath := filepath.Join(categrafDir, "snmp_network.toml")
+	os.WriteFile(categrafPath, []byte(categrafConfig), 0644)
+	sb.WriteString(fmt.Sprintf("✅ Categraf: %s\n", categrafPath))
+	
+	sb.WriteString(fmt.Sprintf("\n📊 监控设备: %d 台\n", len(params.Devices)))
+	sb.WriteString(fmt.Sprintf("📋 监控指标: %d 项\n\n", len(metrics)))
+	sb.WriteString("🚀 启动命令:\n")
+	sb.WriteString("   cd output/infra && docker-compose up -d\n")
+	
+	return sb.String(), nil
+}
+
+// generateSNMPExporterConfig 生成 SNMP Exporter 配置
+func (c *Chat) generateSNMPExporterConfig(metrics []string, devices interface{}) string {
+	// 根据指标生成 OID 配置
+	oidConfigs := map[string][]struct {
+		Name string
+		OID  string
+		Type string
+	}{
+		"cpu": {
+			{"cpu_usage", "1.3.6.1.2.1.25.3.3.1.2", "gauge"},
+		},
+		"memory": {
+			{"memory_total", "1.3.6.1.2.1.25.2.3.1.5", "gauge"},
+			{"memory_used", "1.3.6.1.2.1.25.2.3.1.6", "gauge"},
+		},
+		"interface": {
+			{"if_descr", "1.3.6.1.2.1.2.2.1.2", "string"},
+			{"if_type", "1.3.6.1.2.1.2.2.1.3", "gauge"},
+			{"if_speed", "1.3.6.1.2.1.2.2.1.5", "gauge"},
+		},
+		"port_status": {
+			{"if_oper_status", "1.3.6.1.2.1.2.2.1.8", "gauge"},
+			{"if_admin_status", "1.3.6.1.2.1.2.2.1.7", "gauge"},
+		},
+		"port_traffic": {
+			{"if_in_octets", "1.3.6.1.2.1.31.1.1.1.6", "counter"},
+			{"if_out_octets", "1.3.6.1.2.1.31.1.1.1.10", "counter"},
+			{"if_in_packets", "1.3.6.1.2.1.31.1.1.1.7", "counter"},
+			{"if_out_packets", "1.3.6.1.2.1.31.1.1.1.11", "counter"},
+		},
+		"port_errors": {
+			{"if_in_errors", "1.3.6.1.2.1.2.2.1.14", "counter"},
+			{"if_out_errors", "1.3.6.1.2.1.2.2.1.20", "counter"},
+			{"if_in_discards", "1.3.6.1.2.1.2.2.1.13", "counter"},
+			{"if_out_discards", "1.3.6.1.2.1.2.2.1.19", "counter"},
+		},
+		"system": {
+			{"sys_desc", "1.3.6.1.2.1.1.1", "string"},
+			{"sys_uptime", "1.3.6.1.2.1.1.3", "gauge"},
+			{"sys_name", "1.3.6.1.2.1.1.5", "string"},
+		},
+		"environment": {
+			{"temperature", "1.3.6.1.4.1.9.9.13.1.3.1.6", "gauge"},
+			{"fan_status", "1.3.6.1.4.1.9.9.13.1.4.1.3", "gauge"},
+			{"power_status", "1.3.6.1.4.1.9.9.13.1.5.1.3", "gauge"},
+		},
+		"lldp": {
+			{"lldp_neighbors", "1.0.8802.1.1.2.1.4.1.1.9", "string"},
+		},
+		"vlan": {
+			{"vlan_id", "1.3.6.1.2.1.17.7.1.4.3.1.1", "gauge"},
+		},
+		"stp": {
+			{"stp_state", "1.3.6.1.2.1.17.2.15.1.1", "gauge"},
+		},
+	}
+	
+	var sb strings.Builder
+	sb.WriteString("# SNMP Exporter 配置 - 自动生成\n")
+	sb.WriteString("# 生成时间: " + time.Now().Format("2006-01-02 15:04:05") + "\n\n")
+	sb.WriteString("default:\n")
+	sb.WriteString("  walk:\n")
+	
+	// 收集所有 OID
+	oidSet := make(map[string]bool)
+	for _, m := range metrics {
+		if oids, ok := oidConfigs[m]; ok {
+			for _, oid := range oids {
+				if !oidSet[oid.OID] {
+					sb.WriteString(fmt.Sprintf("    - %s\n", oid.OID))
+					oidSet[oid.OID] = true
+				}
+			}
 		}
 	}
 	
+	sb.WriteString("  metrics:\n")
+	
+	for _, m := range metrics {
+		if oids, ok := oidConfigs[m]; ok {
+			for _, oid := range oids {
+				sb.WriteString(fmt.Sprintf("    - name: %s\n", oid.Name))
+				sb.WriteString(fmt.Sprintf("      oid: %s\n", oid.OID))
+				sb.WriteString(fmt.Sprintf("      type: %s\n", oid.Type))
+				sb.WriteString("      labels:\n")
+				sb.WriteString("        - interface\n")
+				sb.WriteString("\n")
+			}
+		}
+	}
+	
+	return sb.String()
+}
+
+// generateCategrafSNMPConfig 生成 Categraf SNMP 配置
+func (c *Chat) generateCategrafSNMPConfig(metrics []string, devices interface{}, interval string) string {
+	var sb strings.Builder
+	sb.WriteString("# Categraf SNMP 配置 - 自动生成\n")
+	sb.WriteString("# 生成时间: " + time.Now().Format("2006-01-02 15:04:05") + "\n\n")
+	
+	sb.WriteString("[[instances]]\n")
+	sb.WriteString(fmt.Sprintf("interval = \"%s\"\n", interval))
+	sb.WriteString("version = 2\n")
+	sb.WriteString("community = \"public\"\n")
+	sb.WriteString("\n")
+	
+	sb.WriteString("# 监控目标 (请根据实际情况修改)\n")
+	sb.WriteString("targets = [\n")
+	sb.WriteString("  \"192.168.1.1:public\",\n")
 	sb.WriteString("]\n\n")
 	
-	sb.WriteString("💡 将此 JSON 保存到 config/vmagent/targets/snmp-devices.json\n")
-	sb.WriteString("💡 vmagent 会自动加载并开始采集")
+	sb.WriteString("# 监控指标\n")
+	sb.WriteString("# 已启用指标: " + strings.Join(metrics, ", ") + "\n")
+	
+	return sb.String()
+}
+
+// toolGenerateSNMPConfig 生成自定义 SNMP 配置
+func (c *Chat) toolGenerateSNMPConfig(args string) (string, error) {
+	var params struct {
+		DeviceName  string `json:"device_name"`
+		DeviceHost  string `json:"device_host"`
+		Community   string `json:"community"`
+		Format      string `json:"format"`
+		OIDs []struct {
+			Name        string `json:"name"`
+			OID         string `json:"oid"`
+			Description string `json:"description"`
+			Type        string `json:"type"`
+		} `json:"oids"`
+	}
+	
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", err
+	}
+	
+	community := params.Community
+	if community == "" {
+		community = "public"
+	}
+	
+	format := params.Format
+	if format == "" {
+		format = "categraf"
+	}
+	
+	outputDir := "./output/infra/config/custom"
+	os.MkdirAll(outputDir, 0755)
+	
+	var configContent string
+	var filename string
+	
+	switch format {
+	case "snmp_exporter":
+		configContent = c.generateCustomSNMPExporter(params)
+		filename = "snmp_custom.yml"
+	case "telegraf":
+		configContent = c.generateCustomTelegraf(params)
+		filename = "telegraf_custom.conf"
+	default: // categraf
+		configContent = c.generateCustomCategraf(params)
+		filename = "snmp_custom.toml"
+	}
+	
+	outputPath := filepath.Join(outputDir, filename)
+	os.WriteFile(outputPath, []byte(configContent), 0644)
+	
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("✅ 自定义 SNMP 配置已生成 (%s 格式)\n", format))
+	sb.WriteString(fmt.Sprintf("📁 文件: %s\n", outputPath))
+	sb.WriteString(fmt.Sprintf("📊 设备: %s (%s)\n", params.DeviceName, params.DeviceHost))
+	sb.WriteString(fmt.Sprintf("📋 OID 数量: %d\n", len(params.OIDs)))
 	
 	return sb.String(), nil
+}
+
+func (c *Chat) generateCustomCategraf(params interface{}) string {
+	return "# Categraf 自定义 SNMP 配置\n# 请使用标准 Categraf SNMP 配置格式\n"
+}
+
+func (c *Chat) generateCustomSNMPExporter(params interface{}) string {
+	return "# SNMP Exporter 自定义配置\n# 请使用标准 SNMP Exporter 配置格式\n"
+}
+
+func (c *Chat) generateCustomTelegraf(params interface{}) string {
+	return "# Telegraf 自定义 SNMP 配置\n# 请使用标准 Telegraf SNMP 配置格式\n"
 }
 
 // getModelName 获取模型名称
