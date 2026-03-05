@@ -198,6 +198,7 @@ func runAgentMode(cfg *config.Config) error {
 	ag.RegisterPlugin(plugins.NewMIBValidatorPlugin())
 	ag.RegisterPlugin(plugins.NewOIDMonitorPlugin())
 	ag.RegisterPlugin(plugins.NewConfigGenPlugin())
+	ag.RegisterPlugin(plugins.NewHardwareMonitorPlugin())
 
 	fmt.Println("╔════════════════════════════════════════════════════════════╗")
 	fmt.Println("║              MIB-Agent 监控模式                             ║")

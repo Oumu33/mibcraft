@@ -152,3 +152,134 @@ type TelegrafTableConfig struct {
 	Fields     []TelegrafFieldConfig   `toml:"field"`
 	InheritTags []string               `toml:"inherit_tags,omitempty"`
 }
+
+// ==================== IPMI/Redfish/VMware 配置类型 ====================
+
+// IPMIConfig IPMI监控配置 (Telegraf inputs.ipmi_sensor)
+type IPMIConfig struct {
+	Servers       []IPMIServerConfig `toml:"server" json:"servers"`
+	Interval      string             `toml:"interval,omitempty" json:"interval,omitempty"`
+	MetricVersion int                `toml:"metric_version,omitempty" json:"metric_version,omitempty"`
+	Timeout       string             `toml:"timeout,omitempty" json:"timeout,omitempty"`
+}
+
+// IPMIServerConfig IPMI服务器配置
+type IPMIServerConfig struct {
+	Host        string            `toml:"host" json:"host"`
+	Username    string            `toml:"username" json:"username"`
+	Password    string            `toml:"password" json:"password"`
+	Interface   string            `toml:"interface,omitempty" json:"interface,omitempty"` // lan, lanplus, open
+	Port        int               `toml:"port,omitempty" json:"port,omitempty"`
+	Privilege   string            `toml:"privilege,omitempty" json:"privilege,omitempty"` // user, operator, admin
+	Labels      map[string]string `toml:"tags,omitempty" json:"tags,omitempty"`
+}
+
+// RedfishConfig Redfish监控配置 (Telegraf inputs.redfish)
+type RedfishConfig struct {
+	Servers      []RedfishServerConfig `toml:"server" json:"servers"`
+	Interval     string                `toml:"interval,omitempty" json:"interval,omitempty"`
+	Timeout      string                `toml:"timeout,omitempty" json:"timeout,omitempty"`
+}
+
+// RedfishServerConfig Redfish服务器配置 (Dell iDRAC, HPE iLO, etc.)
+type RedfishServerConfig struct {
+	Name         string            `toml:"name" json:"name"`
+	Host         string            `toml:"address" json:"host"`
+	Username     string            `toml:"username" json:"username"`
+	Password     string            `toml:"password" json:"password"`
+	Port         int               `toml:"port,omitempty" json:"port,omitempty"`
+	Insecure     bool              `toml:"insecure_skip_verify,omitempty" json:"insecure,omitempty"`
+	IncludeMetrics []string        `toml:"include_metrics,omitempty" json:"include_metrics,omitempty"`
+	Labels       map[string]string `toml:"tags,omitempty" json:"tags,omitempty"`
+}
+
+// VMwareConfig VMware vSphere监控配置 (Telegraf inputs.vsphere)
+type VMwareConfig struct {
+	VCenters     []VMwareVCenterConfig `toml:"vcenter" json:"vcenters"`
+	Interval     string                `toml:"interval,omitempty" json:"interval,omitempty"`
+	Timeout      string                `toml:"timeout,omitempty" json:"timeout,omitempty"`
+}
+
+// VMwareVCenterConfig vCenter服务器配置
+type VMwareVCenterConfig struct {
+	Name           string            `toml:"name,omitempty" json:"name,omitempty"`
+	URL            string            `toml:"vcenters" json:"url"`
+	Username       string            `toml:"username" json:"username"`
+	Password       string            `toml:"password" json:"password"`
+	Insecure       bool              `toml:"insecure_skip_verify,omitempty" json:"insecure,omitempty"`
+	Datacenter     string            `toml:"datacenter,omitempty" json:"datacenter,omitempty"`
+	Cluster        string            `toml:"cluster,omitempty" json:"cluster,omitempty"`
+	VMInclude      []string          `toml:"vm_metric_include,omitempty" json:"vm_metric_include,omitempty"`
+	VMExclude      []string          `toml:"vm_metric_exclude,omitempty" json:"vm_metric_exclude,omitempty"`
+	HostInclude    []string          `toml:"host_metric_include,omitempty" json:"host_metric_include,omitempty"`
+	HostExclude    []string          `toml:"host_metric_exclude,omitempty" json:"host_metric_exclude,omitempty"`
+	ClusterInclude []string          `toml:"cluster_metric_include,omitempty" json:"cluster_metric_include,omitempty"`
+	DatastoreInclude []string        `toml:"datastore_metric_include,omitempty" json:"datastore_metric_include,omitempty"`
+	Labels         map[string]string `toml:"tags,omitempty" json:"tags,omitempty"`
+}
+
+// IPMIExporterConfig Prometheus IPMI Exporter配置
+type IPMIExporterConfig struct {
+	Modules map[string]IPMIExporterModule `yaml:"modules" json:"modules"`
+}
+
+// IPMIExporterModule IPMI Exporter模块配置
+type IPMIExporterModule struct {
+	User     string `yaml:"user,omitempty" json:"user,omitempty"`
+	Password string `yaml:"pass,omitempty" json:"password,omitempty"`
+	Priv     string `yaml:"priv,omitempty" json:"priv,omitempty"` // admin, operator, user
+	AuthType string `yaml:"auth_type,omitempty" json:"auth_type,omitempty"` // md5, sha1, sha256
+	Timeout  int    `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+}
+
+// HardwareMonitorRequest 硬件监控配置请求
+type HardwareMonitorRequest struct {
+	// 设备列表
+	IPMIDevices   []IPMIDeviceConfig   `json:"ipmi_devices,omitempty"`
+	RedfishDevices []RedfishDeviceConfig `json:"redfish_devices,omitempty"`
+	VMwareVCenters []VMwareVCenterConfig `json:"vmware_vcenters,omitempty"`
+	
+	// 输出格式
+	Format string `json:"format"` // telegraf, ipmi_exporter, redfish_exporter, all
+	
+	// 全局配置
+	GlobalLabels map[string]string `json:"global_labels,omitempty"`
+	
+	// 用户描述
+	Description string `json:"description,omitempty"`
+}
+
+// IPMIDeviceConfig IPMI设备配置
+type IPMIDeviceConfig struct {
+	Name      string            `json:"name"`
+	Host      string            `json:"host"`
+	Username  string            `json:"username,omitempty"`
+	Password  string            `json:"password,omitempty"`
+	Interface string            `json:"interface,omitempty"` // lan, lanplus
+	Port      int               `json:"port,omitempty"`
+	Vendor    string            `json:"vendor,omitempty"` // dell, hpe, supermicro, generic
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+// RedfishDeviceConfig Redfish设备配置
+type RedfishDeviceConfig struct {
+	Name     string            `json:"name"`
+	Host     string            `json:"host"`
+	Username string            `json:"username"`
+	Password string            `json:"password"`
+	Port     int               `json:"port,omitempty"`
+	Vendor   string            `json:"vendor,omitempty"` // dell_idrac, hpe_ilo, lenovo_xclarity, generic
+	Insecure bool              `json:"insecure,omitempty"`
+	Labels   map[string]string `json:"labels,omitempty"`
+}
+
+// HardwareMonitorResult 硬件监控配置生成结果
+type HardwareMonitorResult struct {
+	TelegrafIPMIConfig   string `json:"telegraf_ipmi_config,omitempty"`
+	TelegrafRedfishConfig string `json:"telegraf_redfish_config,omitempty"`
+	TelegrafVMwareConfig string `json:"telegraf_vmware_config,omitempty"`
+	IPMIExporterConfig   string `json:"ipmi_exporter_config,omitempty"`
+	GeneratedAt          time.Time `json:"generated_at"`
+	DevicesConfigured    []string  `json:"devices_configured"`
+	Warnings             []string  `json:"warnings,omitempty"`
+}

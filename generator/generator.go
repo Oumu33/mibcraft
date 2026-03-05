@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Oumu33/mibcraft/types"
@@ -417,4 +418,360 @@ func (g *Generator) ValidateConfig(config string, format string) error {
 	default:
 		return fmt.Errorf("不支持的配置格式: %s", format)
 	}
+}
+
+// ==================== 硬件监控配置生成方法 ====================
+
+// GenerateIPMIConfig 生成Telegraf IPMI监控配置
+func (g *Generator) GenerateIPMIConfig(devices []types.IPMIDeviceConfig, globalLabels map[string]string) (string, error) {
+	var sb strings.Builder
+
+	sb.WriteString("# Telegraf IPMI 监控配置\n")
+	sb.WriteString("# 由 mibcraft 自动生成\n")
+	sb.WriteString("# 用于监控物理服务器：Dell iDRAC, HPE iLO, Supermicro IPMI 等\n\n")
+
+	sb.WriteString("[[inputs.ipmi_sensor]]\n")
+	sb.WriteString("  ## 采集间隔\n")
+	sb.WriteString(fmt.Sprintf("  interval = \"%s\"\n", g.config.DefaultInterval))
+	sb.WriteString("  ## 超时设置\n")
+	sb.WriteString("  timeout = \"5s\"\n")
+	sb.WriteString("  ## 使用新版指标格式\n")
+	sb.WriteString("  metric_version = 2\n\n")
+
+	// 添加服务器配置
+	for _, device := range devices {
+		sb.WriteString("  [[inputs.ipmi_sensor.server]]\n")
+		sb.WriteString(fmt.Sprintf("    ## 服务器名称: %s\n", device.Name))
+		if device.Vendor != "" {
+			sb.WriteString(fmt.Sprintf("    ## 厂商: %s\n", device.Vendor))
+		}
+		sb.WriteString(fmt.Sprintf("    host = \"%s\"\n", device.Host))
+		
+		if device.Username != "" {
+			sb.WriteString(fmt.Sprintf("    username = \"%s\"\n", device.Username))
+		}
+		if device.Password != "" {
+			sb.WriteString(fmt.Sprintf("    password = \"%s\"\n", device.Password))
+		}
+		
+		// 接口类型
+		iface := device.Interface
+		if iface == "" {
+			iface = "lanplus" // 默认使用lanplus
+		}
+		sb.WriteString(fmt.Sprintf("    interface = \"%s\"\n", iface))
+		
+		// 端口
+		port := device.Port
+		if port == 0 {
+			port = 623
+		}
+		sb.WriteString(fmt.Sprintf("    port = %d\n", port))
+		
+		// 标签
+		labels := make(map[string]string)
+		for k, v := range globalLabels {
+			labels[k] = v
+		}
+		for k, v := range device.Labels {
+			labels[k] = v
+		}
+		labels["device_name"] = device.Name
+		if device.Vendor != "" {
+			labels["vendor"] = device.Vendor
+		}
+		labels["monitor_type"] = "ipmi"
+		
+		if len(labels) > 0 {
+			sb.WriteString("    [inputs.ipmi_sensor.server.tags]\n")
+			for k, v := range labels {
+				sb.WriteString(fmt.Sprintf("      %s = \"%s\"\n", k, v))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String(), nil
+}
+
+// GenerateRedfishConfig 生成Telegraf Redfish监控配置
+func (g *Generator) GenerateRedfishConfig(devices []types.RedfishDeviceConfig, globalLabels map[string]string) (string, error) {
+	var sb strings.Builder
+
+	sb.WriteString("# Telegraf Redfish 监控配置\n")
+	sb.WriteString("# 由 mibcraft 自动生成\n")
+	sb.WriteString("# 用于监控现代服务器：Dell iDRAC9+, HPE iLO5+, Lenovo XClarity 等\n\n")
+
+	sb.WriteString("[[inputs.redfish]]\n")
+	sb.WriteString("  ## 采集间隔\n")
+	sb.WriteString(fmt.Sprintf("  interval = \"%s\"\n", g.config.DefaultInterval))
+	sb.WriteString("  ## 超时设置\n")
+	sb.WriteString("  timeout = \"10s\"\n\n")
+
+	// 添加服务器配置
+	for _, device := range devices {
+		sb.WriteString("  [[inputs.redfish.server]]\n")
+		sb.WriteString(fmt.Sprintf("    ## 服务器名称: %s\n", device.Name))
+		if device.Vendor != "" {
+			sb.WriteString(fmt.Sprintf("    ## 厂商: %s\n", device.Vendor))
+		}
+		sb.WriteString(fmt.Sprintf("    name = \"%s\"\n", device.Name))
+		
+		// 构建URL
+		port := device.Port
+		if port == 0 {
+			port = 443
+		}
+		scheme := "https"
+		url := fmt.Sprintf("%s://%s:%d", scheme, device.Host, port)
+		sb.WriteString(fmt.Sprintf("    address = \"%s\"\n", url))
+		
+		sb.WriteString(fmt.Sprintf("    username = \"%s\"\n", device.Username))
+		sb.WriteString(fmt.Sprintf("    password = \"%s\"\n", device.Password))
+		
+		// 是否跳过SSL验证
+		sb.WriteString(fmt.Sprintf("    insecure_skip_verify = %v\n", device.Insecure))
+		
+		// 包含的指标类型
+		sb.WriteString("    include_metrics = [\"thermal\", \"power\", \"system\", \"storage\", \"memory\", \"network\"]\n")
+		
+		// 标签
+		labels := make(map[string]string)
+		for k, v := range globalLabels {
+			labels[k] = v
+		}
+		for k, v := range device.Labels {
+			labels[k] = v
+		}
+		labels["device_name"] = device.Name
+		if device.Vendor != "" {
+			labels["vendor"] = device.Vendor
+		}
+		labels["monitor_type"] = "redfish"
+		
+		if len(labels) > 0 {
+			sb.WriteString("    [inputs.redfish.server.tags]\n")
+			for k, v := range labels {
+				sb.WriteString(fmt.Sprintf("      %s = \"%s\"\n", k, v))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String(), nil
+}
+
+// GenerateVMwareConfig 生成Telegraf VMware vSphere监控配置
+func (g *Generator) GenerateVMwareConfig(vcenters []types.VMwareVCenterConfig, globalLabels map[string]string) (string, error) {
+	var sb strings.Builder
+
+	sb.WriteString("# Telegraf VMware vSphere 监控配置\n")
+	sb.WriteString("# 由 mibcraft 自动生成\n")
+	sb.WriteString("# 用于监控 ESXi 主机和虚拟机\n\n")
+
+	sb.WriteString("[[inputs.vsphere]]\n")
+	sb.WriteString("  ## 采集间隔\n")
+	sb.WriteString(fmt.Sprintf("  interval = \"%s\"\n", g.config.DefaultInterval))
+	sb.WriteString("  ## 超时设置\n")
+	sb.WriteString("  timeout = \"60s\"\n\n")
+
+	// 添加vCenter配置
+	for _, vc := range vcenters {
+		sb.WriteString("  ## vCenter 服务器\n")
+		if vc.Name != "" {
+			sb.WriteString(fmt.Sprintf("  ## 名称: %s\n", vc.Name))
+		}
+		
+		sb.WriteString(fmt.Sprintf("  vcenters = [\"%s\"]\n", vc.URL))
+		sb.WriteString(fmt.Sprintf("  username = \"%s\"\n", vc.Username))
+		sb.WriteString(fmt.Sprintf("  password = \"%s\"\n", vc.Password))
+		sb.WriteString(fmt.Sprintf("  insecure_skip_verify = %v\n\n", vc.Insecure))
+		
+		// VM指标配置
+		sb.WriteString("  ## 虚拟机指标\n")
+		if len(vc.VMInclude) > 0 {
+			sb.WriteString("  vm_metric_include = [\n")
+			for _, m := range vc.VMInclude {
+				sb.WriteString(fmt.Sprintf("    \"%s\",\n", m))
+			}
+			sb.WriteString("  ]\n")
+		} else {
+			sb.WriteString("  vm_metric_include = [\n")
+			sb.WriteString("    \"cpu.usage.average\",\n")
+			sb.WriteString("    \"cpu.ready.average\",\n")
+			sb.WriteString("    \"mem.usage.average\",\n")
+			sb.WriteString("    \"mem.swapinRate.average\",\n")
+			sb.WriteString("    \"mem.swapoutRate.average\",\n")
+			sb.WriteString("    \"disk.usage.average\",\n")
+			sb.WriteString("    \"disk.read.average\",\n")
+			sb.WriteString("    \"disk.write.average\",\n")
+			sb.WriteString("    \"net.usage.average\",\n")
+			sb.WriteString("    \"net.bytesRx.average\",\n")
+			sb.WriteString("    \"net.bytesTx.average\",\n")
+			sb.WriteString("  ]\n")
+		}
+		
+		// 主机指标配置
+		sb.WriteString("\n  ## ESXi主机指标\n")
+		if len(vc.HostInclude) > 0 {
+			sb.WriteString("  host_metric_include = [\n")
+			for _, m := range vc.HostInclude {
+				sb.WriteString(fmt.Sprintf("    \"%s\",\n", m))
+			}
+			sb.WriteString("  ]\n")
+		} else {
+			sb.WriteString("  host_metric_include = [\n")
+			sb.WriteString("    \"cpu.usage.average\",\n")
+			sb.WriteString("    \"cpu.utilization.average\",\n")
+			sb.WriteString("    \"mem.usage.average\",\n")
+			sb.WriteString("    \"mem.utilization.average\",\n")
+			sb.WriteString("    \"disk.usage.average\",\n")
+			sb.WriteString("    \"disk.read.average\",\n")
+			sb.WriteString("    \"disk.write.average\",\n")
+			sb.WriteString("    \"net.usage.average\",\n")
+			sb.WriteString("    \"net.bytesRx.average\",\n")
+			sb.WriteString("    \"net.bytesTx.average\",\n")
+			sb.WriteString("  ]\n")
+		}
+		
+		// 集群指标配置
+		sb.WriteString("\n  ## 集群指标\n")
+		sb.WriteString("  cluster_metric_include = [\n")
+		sb.WriteString("    \"cpu.usage.average\",\n")
+		sb.WriteString("    \"mem.usage.average\",\n")
+		sb.WriteString("  ]\n")
+		
+		// 数据存储指标配置
+		sb.WriteString("\n  ## 数据存储指标\n")
+		sb.WriteString("  datastore_metric_include = [\n")
+		sb.WriteString("    \"disk.used.latest\",\n")
+		sb.WriteString("    \"disk.capacity.latest\",\n")
+		sb.WriteString("  ]\n")
+		
+		// 标签
+		labels := make(map[string]string)
+		for k, v := range globalLabels {
+			labels[k] = v
+		}
+		for k, v := range vc.Labels {
+			labels[k] = v
+		}
+		if vc.Name != "" {
+			labels["vcenter_name"] = vc.Name
+		}
+		labels["monitor_type"] = "vmware"
+		
+		if len(labels) > 0 {
+			sb.WriteString("\n  [inputs.vsphere.tags]\n")
+			for k, v := range labels {
+				sb.WriteString(fmt.Sprintf("    %s = \"%s\"\n", k, v))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String(), nil
+}
+
+// GenerateIPMIExporterConfig 生成Prometheus IPMI Exporter配置
+func (g *Generator) GenerateIPMIExporterConfig(devices []types.IPMIDeviceConfig) (string, error) {
+	var sb strings.Builder
+
+	sb.WriteString("# Prometheus IPMI Exporter 配置\n")
+	sb.WriteString("# 由 mibcraft 自动生成\n")
+	sb.WriteString("# 需要配合 ipmi_exporter 使用\n\n")
+
+	sb.WriteString("modules:\n")
+
+	for _, device := range devices {
+		moduleName := g.sanitizeMetricName(device.Name)
+		sb.WriteString(fmt.Sprintf("  %s:\n", moduleName))
+		sb.WriteString(fmt.Sprintf("    # 服务器: %s\n", device.Name))
+		
+		if device.Username != "" {
+			sb.WriteString(fmt.Sprintf("    user: \"%s\"\n", device.Username))
+		}
+		if device.Password != "" {
+			sb.WriteString(fmt.Sprintf("    pass: \"%s\"\n", device.Password))
+		}
+		
+		// 权限级别
+		priv := "admin"
+		if device.Vendor == "supermicro" {
+			priv = "operator"
+		}
+		sb.WriteString(fmt.Sprintf("    priv: \"%s\"\n", priv))
+		
+		// 认证类型
+		authType := "md5"
+		sb.WriteString(fmt.Sprintf("    auth_type: \"%s\"\n", authType))
+		
+		// 超时
+		sb.WriteString("    timeout: 30\n\n")
+	}
+
+	return sb.String(), nil
+}
+
+// GenerateHardwareMonitorConfig 统一生成硬件监控配置
+func (g *Generator) GenerateHardwareMonitorConfig(req *types.HardwareMonitorRequest) (*types.HardwareMonitorResult, error) {
+	result := &types.HardwareMonitorResult{
+		GeneratedAt:       time.Now(),
+		DevicesConfigured: make([]string, 0),
+		Warnings:          make([]string, 0),
+	}
+
+	// 生成IPMI配置
+	if len(req.IPMIDevices) > 0 {
+		config, err := g.GenerateIPMIConfig(req.IPMIDevices, req.GlobalLabels)
+		if err != nil {
+			return nil, fmt.Errorf("生成IPMI配置失败: %w", err)
+		}
+		result.TelegrafIPMIConfig = config
+		for _, d := range req.IPMIDevices {
+			result.DevicesConfigured = append(result.DevicesConfigured, 
+				fmt.Sprintf("IPMI: %s (%s)", d.Name, d.Host))
+		}
+	}
+
+	// 生成Redfish配置
+	if len(req.RedfishDevices) > 0 {
+		config, err := g.GenerateRedfishConfig(req.RedfishDevices, req.GlobalLabels)
+		if err != nil {
+			return nil, fmt.Errorf("生成Redfish配置失败: %w", err)
+		}
+		result.TelegrafRedfishConfig = config
+		for _, d := range req.RedfishDevices {
+			result.DevicesConfigured = append(result.DevicesConfigured, 
+				fmt.Sprintf("Redfish: %s (%s)", d.Name, d.Host))
+		}
+	}
+
+	// 生成VMware配置
+	if len(req.VMwareVCenters) > 0 {
+		config, err := g.GenerateVMwareConfig(req.VMwareVCenters, req.GlobalLabels)
+		if err != nil {
+			return nil, fmt.Errorf("生成VMware配置失败: %w", err)
+		}
+		result.TelegrafVMwareConfig = config
+		for _, vc := range req.VMwareVCenters {
+			name := vc.Name
+			if name == "" {
+				name = vc.URL
+			}
+			result.DevicesConfigured = append(result.DevicesConfigured, 
+				fmt.Sprintf("VMware: %s", name))
+		}
+	}
+
+	// 如果指定了ipmi_exporter格式
+	if req.Format == "ipmi_exporter" && len(req.IPMIDevices) > 0 {
+		config, err := g.GenerateIPMIExporterConfig(req.IPMIDevices)
+		if err != nil {
+			return nil, fmt.Errorf("生成IPMI Exporter配置失败: %w", err)
+		}
+		result.IPMIExporterConfig = config
+	}
+
+	return result, nil
 }

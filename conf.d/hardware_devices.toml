@@ -1,0 +1,104 @@
+# 硬件监控设备配置示例
+# 由 mibcraft 硬件监控插件使用
+
+# 全局标签，会应用到所有设备
+[global_labels]
+  env = "production"
+  datacenter = "dc1"
+
+# ==================== IPMI 设备配置 ====================
+# 用于监控传统服务器的 IPMI 接口
+# 支持: Dell iDRAC (老版本), HPE iLO (老版本), Supermicro, Lenovo, 通用 IPMI
+
+[[ipmi_devices]]
+  name = "dell-r740-01"
+  host = "192.168.1.101"
+  username = "admin"
+  password = "calvin"
+  interface = "lanplus"  # lan, lanplus
+  vendor = "dell"        # dell, hpe, supermicro, lenovo, generic
+  [ipmi_devices.labels]
+    rack = "A01"
+    role = "compute"
+
+[[ipmi_devices]]
+  name = "hpe-dl380-01"
+  host = "192.168.1.102"
+  username = "admin"
+  password = "password"
+  interface = "lanplus"
+  vendor = "hpe"
+  [ipmi_devices.labels]
+    rack = "A02"
+    role = "storage"
+
+[[ipmi_devices]]
+  name = "supermicro-01"
+  host = "192.168.1.103"
+  username = "ADMIN"
+  password = "ADMIN"
+  interface = "lanplus"
+  vendor = "supermicro"
+  [ipmi_devices.labels]
+    rack = "B01"
+    role = "compute"
+
+# ==================== Redfish 设备配置 ====================
+# 用于监控现代服务器的 Redfish API
+# 支持: Dell iDRAC9+, HPE iLO5+, Lenovo XClarity, 通用 Redfish
+
+[[redfish_devices]]
+  name = "dell-r750-01"
+  host = "192.168.1.111"
+  username = "root"
+  password = "calvin"
+  port = 443
+  vendor = "dell_idrac"
+  insecure = true  # 是否跳过 SSL 验证
+  [redfish_devices.labels]
+    rack = "A03"
+    role = "compute"
+
+[[redfish_devices]]
+  name = "hpe-dl380-02"
+  host = "192.168.1.112"
+  username = "admin"
+  password = "password"
+  vendor = "hpe_ilo"
+  insecure = true
+  [redfish_devices.labels]
+    rack = "A04"
+    role = "storage"
+
+# ==================== VMware vCenter 配置 ====================
+# 用于监控 ESXi 主机和虚拟机
+
+[[vmware_vcenters]]
+  name = "vcenter-prod"
+  url = "https://vcenter.example.com/sdk"
+  username = "monitoring@vsphere.local"
+  password = "YourPassword123!"
+  insecure = true  # 是否跳过 SSL 验证
+  
+  # 可选: 指定数据中心和集群
+  # datacenter = "DC1"
+  # cluster = "Cluster1"
+  
+  # 自定义采集指标 (可选，不指定则使用默认)
+  vm_metric_include = [
+    "cpu.usage.average",
+    "cpu.ready.average",
+    "mem.usage.average",
+    "disk.usage.average",
+    "net.usage.average",
+  ]
+  
+  host_metric_include = [
+    "cpu.usage.average",
+    "mem.usage.average",
+    "disk.usage.average",
+    "net.usage.average",
+  ]
+  
+  [vmware_vcenters.labels]
+    environment = "production"
