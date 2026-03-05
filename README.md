@@ -98,6 +98,93 @@ go build -o mibcraft .
 [AI 生成 Redfish 配置]
 ```
 
+### AI 工具调用示例
+
+Chat 模式内置 10 个 AI 工具，支持自然语言调用：
+
+#### 主机监控 (Node Exporter)
+
+```
+>>> 帮我监控 3 台 Linux 服务器
+>>> 主机: web-01(192.168.1.10), web-02(192.168.1.11), db-01(192.168.1.20)
+
+✅ Node Exporter 配置已生成: ./output/infra/config/vmagent/targets/node-exporters.json
+包含 3 个节点
+```
+
+#### 服务探测 (Blackbox Exporter)
+
+```
+>>> 帮我探测几个网站的可用性
+>>> 网站: https://www.example.com, https://api.example.com, https://grafana.example.com
+
+✅ Blackbox Exporter 配置已生成:
+HTTP 探测: 3 个 -> ./output/infra/config/vmagent/targets/blackbox-http.json
+```
+
+```
+>>> 帮我测试几台服务器的网络连通性
+>>> IP: 192.168.1.1, 192.168.1.2, 192.168.1.3
+
+✅ Blackbox Exporter 配置已生成:
+ICMP 探测: 3 个 -> ./output/infra/config/vmagent/targets/blackbox-icmp.json
+```
+
+#### 硬件监控 (Redfish/iDRAC/iLO)
+
+```
+>>> 帮我监控 Dell R740 服务器的硬件状态
+>>> 设备: dell-r740-01 (192.168.2.100), 用户名 root, 密码 calvin
+
+✅ Redfish 配置已生成:
+- Telegraf: ./output/infra/config/telegraf/telegraf-redfish.conf
+- Exporter: ./output/infra/config/redfish-exporter/redfish.yml
+```
+
+#### IPMI 监控 (老旧服务器)
+
+```
+>>> 帮我通过 IPMI 监控几台老服务器
+>>> 服务器: server-old-01(192.168.3.10), server-old-02(192.168.3.11)
+
+✅ IPMI Exporter 配置已生成:
+- File SD: ./output/infra/config/vmagent/targets/ipmi-devices.json
+- Telegraf: ./output/infra/config/telegraf/telegraf-ipmi.conf
+包含 2 台服务器
+```
+
+#### 网络设备监控 (SNMP)
+
+```
+>>> 帮我监控核心交换机
+>>> 设备: core-sw-01 (192.168.1.100), 华为, community public
+
+✅ 网络设备配置已生成: ./output/infra/config/vmagent/targets/snmp-devices.json
+```
+
+#### VMware vSphere 监控
+
+```
+>>> 帮我监控 vCenter
+>>> 地址: https://vcenter.example.com/sdk, 用户名 administrator@vsphere.local
+
+✅ VMware 配置已生成:
+- Telegraf: ./output/infra/config/telegraf/telegraf.conf
+- Targets: ./output/infra/config/vmagent/targets/vmware-vcenters.json
+```
+
+#### Proxmox VE 监控
+
+```
+>>> 帮我监控 Proxmox 集群
+>>> 节点: pve-node1(192.168.10.100), pve-node2(192.168.10.101)
+
+✅ Proxmox VE 配置已生成:
+- 环境变量: ./output/infra/config/proxmox.env
+- Scrape 配置: ./output/infra/config/proxmox-scrape.yml
+包含 2 个节点
+```
+
 ## MIB 管理
 
 ### 设置 MIB 目录
@@ -231,6 +318,23 @@ url = "https://vcenter.example.com/sdk"
 username = "monitoring@vsphere.local"
 password = "YourPassword"
 ```
+
+## AI 工具列表
+
+Chat 模式内置 10 个 AI 工具：
+
+| 工具名称 | 功能 | 适用场景 |
+|----------|------|----------|
+| `generate_config` | 通用 SNMP 配置生成 | MIB 解析后生成采集配置 |
+| `generate_node_config` | Node Exporter 配置 | Linux/Windows 主机监控 |
+| `generate_blackbox_config` | Blackbox Exporter 配置 | HTTP/ICMP/TCP 服务探测 |
+| `generate_hardware_config` | Redfish 硬件配置 | Dell/HPE/Lenovo 服务器 |
+| `generate_ipmi_config` | IPMI 配置 | 老旧服务器硬件监控 |
+| `generate_network_config` | 网络设备 SNMP 配置 | 交换机/路由器监控 |
+| `generate_vmware_config` | VMware vSphere 配置 | vCenter/ESXi 虚拟化监控 |
+| `generate_proxmox_config` | Proxmox VE 配置 | PVE 虚拟化监控 |
+| `search_mib` | 搜索 MIB 对象 | 查找 OID 定义 |
+| `explain_oid` | 解释 OID 含义 | 了解 OID 用途 |
 
 ## 支持的组件
 
