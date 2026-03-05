@@ -2,17 +2,29 @@
 
 # 🔮 Mibcraft
 
-**SNMP 配置智能生成器 | MIB-Driven Infrastructure Monitoring Config Generator**
+**基础设施监控配置智能生成器 | AI-Powered Infrastructure Monitoring Config Generator**
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-Oumu33/mibcraft-181717?style=flat&logo=github)](https://github.com/Oumu33/mibcraft)
 
-*基于 MIB 文件的智能监控配置生成工具，支持自然语言对话、多采集器配置输出、基础设施监控全覆盖*
+**一句话生成监控配置 | 自然语言对话 | 全栈基础设施覆盖**
 
-[🚀 快速开始](#-快速开始) · [📖 详细教程](#-详细教程) · [🤖 AI 配置](#-ai-模型配置) · [💡 示例](#-使用示例)
+[🚀 快速开始](#-快速开始) · [🤖 AI 配置](#-ai-模型配置) · [💡 示例](#-使用示例) · [📖 详细教程](#-详细教程)
 
 </div>
+
+---
+
+## 🎯 一句话介绍
+
+**不想写监控配置？直接告诉 AI 你想监控什么，自动生成完整配置！**
+
+```bash
+>>> 帮我监控 10 台 Linux 服务器、3 台华为交换机、2 台 Dell 服务器和 1 个 vCenter
+
+✅ 自动生成 4 类配置文件，一键部署！
+```
 
 ---
 
@@ -20,46 +32,90 @@
 
 <table>
 <tr>
-<td width="50%">
+<td width="25%">
 
-### 🧠 AI 驱动
-- 自然语言对话生成配置
-- 支持 DeepSeek / GPT-4o / Claude 等
+### 🧠 AI 对话生成
+- 自然语言描述需求
 - 智能识别设备类型
-- 自动推荐最佳 OID
+- 多轮对话确认细节
+- 自动生成完整配置
 
 </td>
-<td width="50%">
+<td width="25%">
 
-### 🔧 多格式输出
-- Categraf 配置
-- SNMP Exporter 配置
-- Telegraf 配置
-- vmagent 配置
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 📦 MIB 管理
-- 自动解析 MIB 文件
-- 支持压缩包解压 (zip/tar.gz/tar.bz2)
-- OID 搜索与解释
-- 自定义 MIB 目录
+### 🌐 网络监控
+- 12+ 网络设备厂商
+- 20+ 监控指标可选
+- SNMP/LLDP/CDP 支持
+- 拓扑自动发现
 
 </td>
-<td width="50%">
+<td width="25%">
 
-### 🏗️ 基础设施全覆盖
-- 🌐 网络设备 (12+ 厂商)
-- 🖥️ 物理服务器 (5 大品牌)
-- ☁️ 虚拟化平台 (VMware/PVE)
-- 🔍 服务探测 (HTTP/ICMP/TCP)
+### 🖥️ 硬件监控
+- Dell iDRAC / HPE iLO
+- Lenovo XClarity
+- Supermicro / Fujitsu
+- IPMI 老旧服务器
+
+</td>
+<td width="25%">
+
+### ☁️ 虚拟化监控
+- VMware vSphere
+- Proxmox VE
+- 主机/虚拟机/存储
+- 资源使用率
 
 </td>
 </tr>
 </table>
+
+<table>
+<tr>
+<td width="33%">
+
+### 🔍 服务探测
+- HTTP/HTTPS 可用性
+- ICMP 网络连通
+- TCP 端口检测
+- DNS 解析监控
+
+</td>
+<td width="33%">
+
+### 📦 MIB 解析
+- 自动解析 MIB 文件
+- OID 搜索与解释
+- 压缩包解压支持
+- 自定义 OID 配置
+
+</td>
+<td width="33%">
+
+### 📊 多格式输出
+- Prometheus/vmagent
+- Categraf
+- Telegraf
+- SNMP Exporter
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🎮 支持的监控类型
+
+| 类型 | 组件 | 监控内容 | 示例对话 |
+|:-----|:-----|:---------|:---------|
+| 🖥️ **主机** | Node Exporter | CPU、内存、磁盘、网络、进程 | "帮我监控 10 台 Linux 服务器" |
+| 🌐 **网络设备** | SNMP Exporter | 端口流量、错误包、CPU、内存、VLAN | "帮我监控华为核心交换机" |
+| 🔍 **服务探测** | Blackbox Exporter | HTTP 状态、响应时间、ICMP 延迟 | "帮我探测网站可用性" |
+| 🖧 **服务器硬件** | Redfish/IPMI | 温度、风扇、电源、内存、存储 | "帮我监控 Dell R740 硬件" |
+| ☁️ **VMware** | Telegraf vSphere | vCenter、ESXi、虚拟机、数据存储 | "帮我监控 vCenter 集群" |
+| 🐧 **Proxmox** | PVE Exporter | 节点、LXC、QEMU、存储 | "帮我监控 PVE 集群" |
+| 📦 **MIB 解析** | 自定义 SNMP | 用户指定 OID | "解析这个 MIB 文件" |
 
 ---
 
@@ -283,9 +339,6 @@ EOF
 ✅ Node Exporter 配置已生成！
 📁 文件: ./output/infra/config/vmagent/targets/node-exporters.json
 📊 包含: 3 个监控节点
-
-🚀 下一步:
-   cd ./output/infra && docker-compose up -d
 ```
 
 ### 🌐 服务探测 (Blackbox Exporter)
@@ -301,27 +354,63 @@ EOF
 📊 包含: 3 个探测目标
 ```
 
-```
->>> 帮我测试几台服务器的网络连通性
-
-请提供 IP 地址：
->>> 192.168.1.1, 192.168.1.2, 192.168.1.3
-
-✅ Blackbox Exporter 配置已生成！
-📁 ICMP 探测: ./output/infra/config/vmagent/targets/blackbox-icmp.json
-```
-
-### 🖧 网络设备监控
+### 🌐 网络设备监控 (多指标选择)
 
 ```
->>> 帮我监控华为核心交换机
+>>> 网络设备支持哪些监控指标？
+
+📡 支持的监控指标:
+  • cpu        - CPU 使用率
+  • memory     - 内存使用率  
+  • interface  - 接口基本信息
+  • port_status   - 端口状态
+  • port_traffic  - 端口流量 (入/出)
+  • port_errors   - 端口错误包
+  • vlan       - VLAN 信息
+  • stp        - 生成树状态
+  • lldp       - LLDP 邻居发现
+  • ospf       - OSPF 邻居状态
+  • bgp        - BGP 对等体状态
+  • environment - 环境 (温度/风扇/电源)
+  • optics     - 光模块信息
+  • all        - 全部指标
+```
+
+```
+>>> 帮我监控华为核心交换机，需要 CPU、内存、端口流量和错误包
 
 请提供设备信息：
 >>> 名称: core-sw-01, IP: 192.168.1.100, Community: public
 
 ✅ 网络设备 SNMP 配置已生成！
-📁 文件: ./output/infra/config/vmagent/targets/snmp-devices.json
+📁 vmagent: ./output/infra/config/vmagent/targets/snmp-devices.json
+📁 SNMP Exporter: ./output/infra/config/snmp-exporter/snmp.yml
+📁 Categraf: ./output/infra/config/categraf/snmp.toml
+📊 监控指标: cpu, memory, port_traffic, port_errors
 📊 厂商: 华为 (支持 NDP + LLDP 拓扑发现)
+```
+
+```
+>>> 帮我监控核心交换机所有指标
+
+✅ 网络设备 SNMP 配置已生成！
+📊 监控指标: 全部 14 个指标
+📊 采集间隔: 30s
+```
+
+### 🖧 网络设备批量配置
+
+```
+>>> 帮我监控 5 台交换机，都是华为的，需要全部指标
+
+请提供设备列表：
+>>> core-01:192.168.1.1, core-02:192.168.1.2, agg-01:192.168.2.1, agg-02:192.168.2.2, access-01:192.168.3.1
+
+✅ 批量网络设备配置已生成！
+📁 文件: ./output/infra/config/vmagent/targets/snmp-devices.json
+📊 包含: 5 台设备
+📊 监控指标: 全部 14 个指标
+📊 输出格式: vmagent + SNMP Exporter + Categraf
 ```
 
 ### 🖥️ 硬件监控 (Redfish/iDRAC/iLO)
@@ -377,6 +466,29 @@ EOF
 📁 环境变量: ./output/infra/config/proxmox.env
 📁 Scrape 配置: ./output/infra/config/proxmox-scrape.yml
 📊 包含: 2 个节点, 监控 VM/LXC/QEMU
+```
+
+### 📦 MIB 解析与自定义 OID
+
+```
+>>> 解析 mibs/HUAWEI-DEVICE-MIB.mib 文件
+
+✅ MIB 文件已加载！
+📋 模块: HUAWEI-DEVICE-MIB
+📊 对象: 45 个
+🌳 树形结构:
+  ├── hwDevice (1.3.6.1.4.1.2011.2.23.1)
+  │   ├── hwCpuUsage (.1.3.6.1.4.1.2011.2.23.1.1.1)
+  │   ├── hwMemUsage (.1.3.6.1.4.1.2011.2.23.1.1.2)
+  │   └── ...
+```
+
+```
+>>> 帮我生成自定义 OID 1.3.6.1.4.1.2011.2.23.1.1.1.6 的监控配置
+
+✅ 自定义 SNMP 配置已生成！
+📁 Categraf: ./output/infra/config/custom/snmp_custom.toml
+📊 OID: 1.3.6.1.4.1.2011.2.23.1.1.1.6 (华为 CPU 使用率)
 ```
 
 ---
