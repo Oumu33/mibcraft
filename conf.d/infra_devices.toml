@@ -1,0 +1,172 @@
+# 基础设施监控设备配置示例
+# 用于生成完整的监控栈配置
+
+environment = "production"
+datacenter = "dc1"
+cluster = "monitoring-cluster"
+
+# 全局标签
+[global_labels]
+env = "production"
+region = "cn-east-1"
+
+# ==================== Node Exporter 目标 ====================
+[[node_exporters]]
+host = "192.168.1.10:9100"
+name = "web-server-01"
+role = "web"
+priority = "P0"
+
+[[node_exporters]]
+host = "192.168.1.11:9100"
+name = "db-server-01"
+role = "database"
+priority = "P0"
+
+[[node_exporters]]
+host = "192.168.1.12:9100"
+name = "cache-server-01"
+role = "cache"
+priority = "P1"
+
+# ==================== SNMP 设备目标 ====================
+[[snmp_devices]]
+host = "192.168.1.100"
+name = "core-switch-01"
+type = "switch"
+tier = "core"
+vendor = "huawei"
+community = "public"
+module = "if_mib"
+
+[[snmp_devices]]
+host = "192.168.1.101"
+name = "core-switch-02"
+type = "switch"
+tier = "core"
+vendor = "h3c"
+community = "public"
+module = "if_mib"
+
+[[snmp_devices]]
+host = "192.168.1.110"
+name = "access-switch-01"
+type = "switch"
+tier = "access"
+vendor = "ruijie"
+community = "public"
+module = "if_mib"
+
+# ==================== Blackbox 探测目标 ====================
+[[blackbox_targets]]
+url = "https://www.example.com"
+name = "company-website"
+module = "http_2xx"
+type = "https"
+priority = "P0"
+
+[[blackbox_targets]]
+url = "https://api.example.com/health"
+name = "api-health-check"
+module = "http_2xx"
+type = "https"
+priority = "P0"
+
+[[blackbox_targets]]
+url = "192.168.1.100"
+name = "core-switch-ping"
+module = "icmp"
+type = "icmp"
+priority = "P1"
+
+# ==================== Redfish 设备 (现代服务器) ====================
+[[redfish_devices]]
+name = "dell-r740-01"
+host = "192.168.2.100"
+username = "root"
+password = "calvin"
+vendor = "dell_idrac"
+insecure = true
+
+[[redfish_devices]]
+name = "hpe-dl360-01"
+host = "192.168.2.101"
+username = "Administrator"
+password = "your-password"
+vendor = "hpe_ilo"
+insecure = true
+
+[[redfish_devices]]
+name = "lenovo-sr650-01"
+host = "192.168.2.102"
+username = "USERID"
+password = "PASSW0RD"
+vendor = "lenovo_xclarity"
+insecure = true
+
+# ==================== IPMI 设备 (老旧服务器) ====================
+[[ipmi_devices]]
+name = "old-server-01"
+host = "192.168.3.10"
+username = "ADMIN"
+password = "ADMIN"
+vendor = "generic"
+interface = "lanplus"
+port = 623
+
+[[ipmi_devices]]
+name = "old-server-02"
+host = "192.168.3.11"
+username = "root"
+password = "changeme"
+vendor = "dell"
+interface = "lanplus"
+port = 623
+
+# ==================== VMware vCenter 配置 ====================
+[[vmware_vcenters]]
+name = "vcenter-main"
+url = "https://vcenter.example.com/sdk"
+username = "monitoring@vsphere.local"
+password = "YourPassword123!"
+insecure = true
+
+# ==================== Proxmox VE 配置 ====================
+[[proxmox_hosts]]
+name = "pve-node-01"
+host = "192.168.4.10"
+port = 8006
+username = "root@pam"
+password = "your-password"
+insecure = true
+
+# ==================== 拓扑发现设备 ====================
+[[topology_devices]]
+name = "Switch-Core-01"
+host = "192.168.1.100"
+type = "switch"
+tier = "core"
+vendor = "huawei"
+location = "dc1-rack-A01"
+community = "public"
+protocol = "ndp"
+
+[[topology_devices]]
+name = "Switch-Core-02"
+host = "192.168.1.101"
+type = "switch"
+tier = "core"
+vendor = "h3c"
+location = "dc1-rack-A02"
+community = "public"
+protocol = "lnp"
+
+[[topology_devices]]
+name = "Switch-Access-01"
+host = "192.168.1.110"
+type = "switch"
+tier = "access"
+vendor = "ruijie"
+location = "dc1-rack-B01"
+community = "public"
+protocol = "lldp"
