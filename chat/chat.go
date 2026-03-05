@@ -565,7 +565,7 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "generate_network_config",
-				Description: "生成网络设备监控配置（SNMP）。指标分类: [基础]system/cpu/memory/interface [端口]port_status/port_traffic/port_errors/optics [硬件]environment/stack/poe [二层]vlan/stp/lldp/lacp [三层]ospf/bgp/vrrp/routes/arp [安全]acl/nat/vpn [无线]wireless [其他]qos/dhcp",
+				Description: "生成网络设备监控配置。输出格式可选: snmp_exporter, categraf, telegraf, vmagent。根据用户需求选择格式，不必全部生成。",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -588,6 +588,11 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 							"type":        "array",
 							"description": "指标类别: basic(基础), port(端口), hardware(硬件), l2(二层), l3(三层), security(安全), wireless(无线), qos(QoS)。推荐组合: basic+port",
 							"items":       map[string]string{"type": "string"},
+						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "输出格式: snmp_exporter(SNMP Exporter), categraf(Categraf), telegraf(Telegraf), vmagent(Prometheus File SD), all(全部)。默认: vmagent",
+							"enum":        []string{"snmp_exporter", "categraf", "telegraf", "vmagent", "all"},
 						},
 						"interval": map[string]interface{}{
 							"type":        "string",
@@ -1238,6 +1243,7 @@ func (c *Chat) toolGenerateNetworkConfig(args string) (string, error) {
 			Community  string `json:"community"`
 		} `json:"devices"`
 		MetricCategories []string `json:"metric_categories"`
+		Format           string   `json:"format"`
 		Interval         string   `json:"interval"`
 	}
 	
@@ -1270,6 +1276,12 @@ func (c *Chat) toolGenerateNetworkConfig(args string) (string, error) {
 		metrics = []string{"system", "cpu", "memory", "interface"}
 	}
 	
+	// 默认格式
+	format := params.Format
+	if format == "" {
+		format = "vmagent"
+	}
+	
 	interval := params.Interval
 	if interval == "" {
 		interval = "30s"
@@ -1285,58 +1297,117 @@ func (c *Chat) toolGenerateNetworkConfig(args string) (string, error) {
 	sb.WriteString(fmt.Sprintf("设备类型: %s\n", params.Devices[0].DeviceType))
 	sb.WriteString(fmt.Sprintf("监控类别: %s\n", strings.Join(params.MetricCategories, ", ")))
 	sb.WriteString(fmt.Sprintf("具体指标: %s\n", strings.Join(metrics, ", ")))
+	sb.WriteString(fmt.Sprintf("输出格式: %s\n", format))
 	sb.WriteString(fmt.Sprintf("采集间隔: %s\n\n", interval))
 	
-	// 1. 生成 vmagent File SD JSON
-	targets := []map[string]interface{}{}
-	for _, dev := range params.Devices {
-		community := dev.Community
-		if community == "" {
-			community = "public"
+	// 构建设备信息
+	devices := params.Devices
+	
+	// 根据格式生成配置
+	switch format {
+	case "vmagent", "all":
+		targets := []map[string]interface{}{}
+		for _, dev := range devices {
+			community := dev.Community
+			if community == "" {
+				community = "public"
+			}
+			targets = append(targets, map[string]interface{}{
+				"targets": []string{dev.Host},
+				"labels": map[string]string{
+					"job":         "snmp",
+					"instance":    dev.Name,
+					"device_type": dev.DeviceType,
+					"vendor":      dev.Vendor,
+					"community":   community,
+				},
+			})
 		}
-		
-		target := map[string]interface{}{
-			"targets": []string{dev.Host},
-			"labels": map[string]string{
-				"job":         "snmp",
-				"instance":    dev.Name,
-				"device_type": dev.DeviceType,
-				"vendor":      dev.Vendor,
-				"community":   community,
-			},
-		}
-		targets = append(targets, target)
+		targetsDir := filepath.Join(outputDir, "vmagent/targets")
+		os.MkdirAll(targetsDir, 0755)
+		targetsPath := filepath.Join(targetsDir, "snmp-devices.json")
+		data, _ := json.MarshalIndent(targets, "", "  ")
+		os.WriteFile(targetsPath, data, 0644)
+		sb.WriteString(fmt.Sprintf("✅ vmagent File SD: %s\n", targetsPath))
 	}
 	
-	targetsDir := filepath.Join(outputDir, "vmagent/targets")
-	os.MkdirAll(targetsDir, 0755)
-	targetsPath := filepath.Join(targetsDir, "snmp-devices.json")
-	data, _ := json.MarshalIndent(targets, "", "  ")
-	os.WriteFile(targetsPath, data, 0644)
-	sb.WriteString(fmt.Sprintf("✅ File SD: %s\n", targetsPath))
+	switch format {
+	case "snmp_exporter", "all":
+		snmpConfig := c.generateSNMPExporterConfig(metrics, devices)
+		snmpDir := filepath.Join(outputDir, "snmp-exporter")
+		os.MkdirAll(snmpDir, 0755)
+		snmpPath := filepath.Join(snmpDir, "snmp.yml")
+		os.WriteFile(snmpPath, []byte(snmpConfig), 0644)
+		sb.WriteString(fmt.Sprintf("✅ SNMP Exporter: %s\n", snmpPath))
+	}
 	
-	// 2. 生成 SNMP Exporter 配置
-	snmpConfig := c.generateSNMPExporterConfig(metrics, params.Devices)
-	snmpDir := filepath.Join(outputDir, "snmp-exporter")
-	os.MkdirAll(snmpDir, 0755)
-	snmpPath := filepath.Join(snmpDir, "snmp.yml")
-	os.WriteFile(snmpPath, []byte(snmpConfig), 0644)
-	sb.WriteString(fmt.Sprintf("✅ SNMP Exporter: %s\n", snmpPath))
+	switch format {
+	case "categraf", "all":
+		categrafConfig := c.generateCategrafSNMPConfig(metrics, devices, interval)
+		categrafDir := filepath.Join(outputDir, "categraf")
+		os.MkdirAll(categrafDir, 0755)
+		categrafPath := filepath.Join(categrafDir, "snmp_network.toml")
+		os.WriteFile(categrafPath, []byte(categrafConfig), 0644)
+		sb.WriteString(fmt.Sprintf("✅ Categraf: %s\n", categrafPath))
+	}
 	
-	// 3. 生成 Categraf 配置
-	categrafConfig := c.generateCategrafSNMPConfig(metrics, params.Devices, interval)
-	categrafDir := filepath.Join(outputDir, "categraf")
-	os.MkdirAll(categrafDir, 0755)
-	categrafPath := filepath.Join(categrafDir, "snmp_network.toml")
-	os.WriteFile(categrafPath, []byte(categrafConfig), 0644)
-	sb.WriteString(fmt.Sprintf("✅ Categraf: %s\n", categrafPath))
+	switch format {
+	case "telegraf", "all":
+		telegrafConfig := c.generateTelegrafSNMPConfig(metrics, devices, interval)
+		telegrafDir := filepath.Join(outputDir, "telegraf")
+		os.MkdirAll(telegrafDir, 0755)
+		telegrafPath := filepath.Join(telegrafDir, "snmp.conf")
+		os.WriteFile(telegrafPath, []byte(telegrafConfig), 0644)
+		sb.WriteString(fmt.Sprintf("✅ Telegraf: %s\n", telegrafPath))
+	}
 	
-	sb.WriteString(fmt.Sprintf("\n📊 监控设备: %d 台\n", len(params.Devices)))
+	sb.WriteString(fmt.Sprintf("\n📊 监控设备: %d 台\n", len(devices)))
 	sb.WriteString(fmt.Sprintf("📋 监控指标: %d 项\n\n", len(metrics)))
-	sb.WriteString("🚀 启动命令:\n")
-	sb.WriteString("   cd output/infra && docker-compose up -d\n")
+	sb.WriteString("🚀 下一步:\n")
+	sb.WriteString("   1. 检查生成的配置文件\n")
+	sb.WriteString("   2. 根据需要调整参数\n")
+	sb.WriteString("   3. 部署到对应采集器\n")
 	
 	return sb.String(), nil
+}
+
+// generateTelegrafSNMPConfig 生成 Telegraf SNMP 配置
+func (c *Chat) generateTelegrafSNMPConfig(metrics []string, devices interface{}, interval string) string {
+	var sb strings.Builder
+	sb.WriteString("# Telegraf SNMP 配置 - 自动生成\n")
+	sb.WriteString("# 生成时间: " + time.Now().Format("2006-01-02 15:04:05") + "\n\n")
+	
+	sb.WriteString("[[inputs.snmp]]\n")
+	sb.WriteString(fmt.Sprintf("interval = \"%s\"\n", interval))
+	sb.WriteString("version = 2\n")
+	sb.WriteString("community = \"public\"\n\n")
+	
+	sb.WriteString("# 监控目标\n")
+	sb.WriteString("agents = [\n")
+	
+	// 处理设备列表
+	switch d := devices.(type) {
+	case []struct {
+		Name       string `json:"name"`
+		Host       string `json:"host"`
+		DeviceType string `json:"device_type"`
+		Vendor     string `json:"vendor"`
+		Community  string `json:"community"`
+	}:
+		for i, dev := range d {
+			sb.WriteString(fmt.Sprintf("  \"udp://%s:161\"", dev.Host))
+			if i < len(d)-1 {
+				sb.WriteString(",")
+			}
+			sb.WriteString("\n")
+		}
+	}
+	sb.WriteString("]\n\n")
+	
+	sb.WriteString("# 监控指标\n")
+	sb.WriteString("# 已启用指标: " + strings.Join(metrics, ", ") + "\n")
+	
+	return sb.String()
 }
 
 // generateSNMPExporterConfig 生成 SNMP Exporter 配置

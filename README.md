@@ -420,42 +420,54 @@ EOF
 ```
 
 ```
->>> 帮我监控华为核心交换机，指标类别: basic, port, hardware, l2
+>>> 帮我监控华为核心交换机
+
+请补充信息：
+- 设备类型: switch/router/firewall/wireless?
+>>> switch
+
+- 指标类别: basic, port, hardware, l2, l3, security?
+>>> basic, port, hardware
+
+- 输出格式: snmp_exporter, categraf, telegraf, vmagent?
+>>> categraf
 
 请提供设备信息：
->>> 名称: core-sw-01, IP: 192.168.1.100, 设备类型: switch, 厂商: huawei
+>>> 名称: core-sw-01, IP: 192.168.1.100
 
-✅ 网络设备 SNMP 配置已生成！
-📁 vmagent: ./output/infra/config/vmagent/targets/snmp-devices.json
-📁 SNMP Exporter: ./output/infra/config/snmp-exporter/snmp.yml
-📁 Categraf: ./output/infra/config/categraf/snmp.toml
+✅ Categraf 配置已生成！
+📁 文件: ./output/infra/config/categraf/snmp_network.toml
 📊 设备类型: switch (交换机)
-📊 监控类别: basic, port, hardware, l2
-📊 具体指标: system, cpu, memory, interface, port_status, port_traffic, port_errors, environment, vlan, stp, lldp
-📊 采集间隔: 30s
+📊 监控类别: basic, port, hardware
+📊 具体指标: system, cpu, memory, interface, port_status, port_traffic, port_errors, environment
 ```
 
 ```
->>> 帮我监控 Cisco 路由器，需要 OSPF 和 BGP 状态
+>>> 帮我生成 SNMP Exporter 配置，监控 Cisco 路由器的 OSPF 状态
 
 请提供设备信息：
->>> 名称: core-router-01, IP: 192.168.1.1, 设备类型: router, 厂商: cisco
+>>> 名称: core-router-01, IP: 192.168.1.1, 厂商: cisco
 
-✅ 网络设备 SNMP 配置已生成！
-📊 设备类型: router (路由器)
-📊 监控类别: basic, port, hardware, l3
-📊 具体指标: system, cpu, memory, interface, port_status, port_traffic, port_errors, environment, routes, ospf, bgp, arp
+✅ SNMP Exporter 配置已生成！
+📁 文件: ./output/infra/config/snmp-exporter/snmp.yml
+📊 设备类型: router
+📊 监控类别: basic, port, l3
+📊 包含指标: system, cpu, memory, interface, routes, ospf, arp
 ```
 
 ```
->>> 帮我监控防火墙的 NAT 和 VPN 状态
+>>> 我用 Telegraf，帮我生成配置监控防火墙
 
 请提供设备信息：
->>> 名称: fw-01, IP: 192.168.1.254, 设备类型: firewall, 厂商: paloalto
+>>> 名称: fw-01, IP: 192.168.1.254, 厂商: paloalto, 类型: firewall
 
-✅ 防火墙监控配置已生成！
-📊 监控类别: basic, port, hardware, security
-📊 具体指标: system, cpu, memory, interface, port_status, port_traffic, environment, acl, nat, vpn
+需要哪些指标？
+>>> basic, port, security
+
+✅ Telegraf 配置已生成！
+📁 文件: ./output/infra/config/telegraf/snmp.conf
+📊 监控类别: basic, port, security
+📊 具体指标: system, cpu, memory, interface, port_status, acl
 ```
 
 ### 🖥️ 硬件监控 (Redfish/iDRAC/iLO)
