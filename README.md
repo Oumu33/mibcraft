@@ -110,12 +110,15 @@
 | 类型 | 组件 | 监控内容 | 示例对话 |
 |:-----|:-----|:---------|:---------|
 | 🖥️ **主机** | Node Exporter | CPU、内存、磁盘、网络、进程 | "帮我监控 10 台 Linux 服务器" |
-| 🌐 **网络设备** | SNMP Exporter | 端口流量、错误包、CPU、内存、VLAN | "帮我监控华为核心交换机" |
+| 🔀 **交换机** | SNMP Exporter | 端口流量、VLAN、STP、LLDP、堆叠 | "帮我监控华为核心交换机" |
+| 🌐 **路由器** | SNMP Exporter | 路由表、OSPF、BGP、VRRP、NAT | "帮我监控 Cisco 路由器，需要 OSPF" |
+| 🔥 **防火墙** | SNMP Exporter | ACL、NAT、VPN、会话、威胁 | "帮我监控防火墙的 NAT 和 VPN" |
+| 📶 **无线** | SNMP Exporter | AP 状态、客户端、SSID、信道 | "帮我监控无线控制器" |
 | 🔍 **服务探测** | Blackbox Exporter | HTTP 状态、响应时间、ICMP 延迟 | "帮我探测网站可用性" |
 | 🖧 **服务器硬件** | Redfish/IPMI | 温度、风扇、电源、内存、存储 | "帮我监控 Dell R740 硬件" |
 | ☁️ **VMware** | Telegraf vSphere | vCenter、ESXi、虚拟机、数据存储 | "帮我监控 vCenter 集群" |
 | 🐧 **Proxmox** | PVE Exporter | 节点、LXC、QEMU、存储 | "帮我监控 PVE 集群" |
-| 📦 **MIB 解析** | 自定义 SNMP | 用户指定 OID | "解析这个 MIB 文件" |
+| 📦 **自定义 SNMP** | 自定义 OID | 用户指定 OID | "帮我监控这个 OID" |
 
 ---
 
@@ -359,58 +362,100 @@ EOF
 ```
 >>> 网络设备支持哪些监控指标？
 
-📡 支持的监控指标:
-  • cpu        - CPU 使用率
-  • memory     - 内存使用率  
-  • interface  - 接口基本信息
-  • port_status   - 端口状态
-  • port_traffic  - 端口流量 (入/出)
-  • port_errors   - 端口错误包
-  • vlan       - VLAN 信息
-  • stp        - 生成树状态
-  • lldp       - LLDP 邻居发现
-  • ospf       - OSPF 邻居状态
-  • bgp        - BGP 对等体状态
-  • environment - 环境 (温度/风扇/电源)
-  • optics     - 光模块信息
-  • all        - 全部指标
+📡 网络设备监控指标分类
+
+### 📊 basic - 基础指标
+| 指标 | 说明 | 适用设备 |
+|:-----|:-----|:---------|
+| `system` | 系统信息 (描述/运行时间/名称) | 全部 |
+| `cpu` | CPU 使用率 | 全部 |
+| `memory` | 内存使用率 | 全部 |
+
+### 🔌 port - 端口指标
+| 指标 | 说明 | 适用设备 |
+|:-----|:-----|:---------|
+| `interface` | 接口信息 (类型/速率/MTU) | 全部 |
+| `port_status` | 端口状态 (up/down/admin) | 交换机/路由器 |
+| `port_traffic` | 端口流量 (入/出字节/包) | 交换机/路由器 |
+| `port_errors` | 端口错误 (CRC/丢包/冲突) | 交换机/路由器 |
+| `optics` | 光模块 (温度/功率/波长) | 交换机/路由器 |
+
+### 🖥️ hardware - 硬件指标
+| 指标 | 说明 | 适用设备 |
+|:-----|:-----|:---------|
+| `environment` | 环境传感器 (温度/风扇/电源) | 交换机/路由器/防火墙 |
+| `stack` | 堆叠状态 (成员/端口) | 交换机 |
+| `poe` | PoE 功率/端口状态 | 交换机 |
+
+### 🔄 l2 - 二层协议
+| 指标 | 说明 | 适用设备 |
+|:-----|:-----|:---------|
+| `vlan` | VLAN 信息 | 交换机 |
+| `stp` | 生成树状态 | 交换机 |
+| `lldp` | LLDP 邻居发现 | 全部 |
+| `lacp` | 链路聚合状态 | 交换机 |
+
+### 🌐 l3 - 三层协议
+| 指标 | 说明 | 适用设备 |
+|:-----|:-----|:---------|
+| `routes` | 路由表统计 | 路由器/防火墙/三层交换 |
+| `ospf` | OSPF 邻居/区域状态 | 路由器/三层交换 |
+| `bgp` | BGP 对等体状态 | 路由器 |
+| `vrrp` | VRRP/HSRP 状态 | 路由器/防火墙 |
+| `arp` | ARP 表统计 | 全部 |
+
+### 🔒 security - 安全指标
+| 指标 | 说明 | 适用设备 |
+|:-----|:-----|:---------|
+| `acl` | ACL 匹配计数 | 防火墙/路由器/交换机 |
+| `nat` | NAT 连接/转换统计 | 防火墙/路由器 |
+| `vpn` | VPN 隧道状态/流量 | 防火墙/路由器 |
+
+### 📶 wireless - 无线指标
+| 指标 | 说明 | 适用设备 |
+|:-----|:-----|:---------|
+| `ap_status` | AP 在线状态 | 无线控制器 |
+| `wireless` | 无线客户端/信道/功率 | 无线控制器 |
+| `ssid` | SSID 统计 | 无线控制器 |
 ```
 
 ```
->>> 帮我监控华为核心交换机，需要 CPU、内存、端口流量和错误包
+>>> 帮我监控华为核心交换机，指标类别: basic, port, hardware, l2
 
 请提供设备信息：
->>> 名称: core-sw-01, IP: 192.168.1.100, Community: public
+>>> 名称: core-sw-01, IP: 192.168.1.100, 设备类型: switch, 厂商: huawei
 
 ✅ 网络设备 SNMP 配置已生成！
 📁 vmagent: ./output/infra/config/vmagent/targets/snmp-devices.json
 📁 SNMP Exporter: ./output/infra/config/snmp-exporter/snmp.yml
 📁 Categraf: ./output/infra/config/categraf/snmp.toml
-📊 监控指标: cpu, memory, port_traffic, port_errors
-📊 厂商: 华为 (支持 NDP + LLDP 拓扑发现)
-```
-
-```
->>> 帮我监控核心交换机所有指标
-
-✅ 网络设备 SNMP 配置已生成！
-📊 监控指标: 全部 14 个指标
+📊 设备类型: switch (交换机)
+📊 监控类别: basic, port, hardware, l2
+📊 具体指标: system, cpu, memory, interface, port_status, port_traffic, port_errors, environment, vlan, stp, lldp
 📊 采集间隔: 30s
 ```
 
-### 🖧 网络设备批量配置
+```
+>>> 帮我监控 Cisco 路由器，需要 OSPF 和 BGP 状态
+
+请提供设备信息：
+>>> 名称: core-router-01, IP: 192.168.1.1, 设备类型: router, 厂商: cisco
+
+✅ 网络设备 SNMP 配置已生成！
+📊 设备类型: router (路由器)
+📊 监控类别: basic, port, hardware, l3
+📊 具体指标: system, cpu, memory, interface, port_status, port_traffic, port_errors, environment, routes, ospf, bgp, arp
+```
 
 ```
->>> 帮我监控 5 台交换机，都是华为的，需要全部指标
+>>> 帮我监控防火墙的 NAT 和 VPN 状态
 
-请提供设备列表：
->>> core-01:192.168.1.1, core-02:192.168.1.2, agg-01:192.168.2.1, agg-02:192.168.2.2, access-01:192.168.3.1
+请提供设备信息：
+>>> 名称: fw-01, IP: 192.168.1.254, 设备类型: firewall, 厂商: paloalto
 
-✅ 批量网络设备配置已生成！
-📁 文件: ./output/infra/config/vmagent/targets/snmp-devices.json
-📊 包含: 5 台设备
-📊 监控指标: 全部 14 个指标
-📊 输出格式: vmagent + SNMP Exporter + Categraf
+✅ 防火墙监控配置已生成！
+📊 监控类别: basic, port, hardware, security
+📊 具体指标: system, cpu, memory, interface, port_status, port_traffic, environment, acl, nat, vpn
 ```
 
 ### 🖥️ 硬件监控 (Redfish/iDRAC/iLO)

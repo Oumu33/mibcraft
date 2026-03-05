@@ -549,10 +549,15 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "list_network_metrics",
-				Description: "列出网络设备支持的监控指标类型，帮助用户选择需要监控的项目",
+				Description: "列出网络设备支持的监控指标，按设备类型和功能分类展示。设备类型: switch(交换机)、router(路由器)、firewall(防火墙)、wireless(无线)、loadbalancer(负载均衡)",
 				Parameters: map[string]interface{}{
-					"type":       "object",
-					"properties": map[string]interface{}{},
+					"type": "object",
+					"properties": map[string]interface{}{
+						"device_type": map[string]interface{}{
+							"type":        "string",
+							"description": "设备类型: switch, router, firewall, wireless, loadbalancer。不填则显示全部",
+						},
+					},
 				},
 			},
 		},
@@ -560,7 +565,7 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "generate_network_config",
-				Description: "生成网络设备监控配置（SNMP），支持多指标监控。指标可选: cpu, memory, interface, port_status, port_errors, port_traffic, vlan, stp, lldp, ospf, bgp, arp, dhcp, acl, stack, poe, optics, environment, system, all",
+				Description: "生成网络设备监控配置（SNMP）。指标分类: [基础]system/cpu/memory/interface [端口]port_status/port_traffic/port_errors/optics [硬件]environment/stack/poe [二层]vlan/stp/lldp/lacp [三层]ospf/bgp/vrrp/routes/arp [安全]acl/nat/vpn [无线]wireless [其他]qos/dhcp",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -572,16 +577,16 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 								"properties": map[string]interface{}{
 									"name":        map[string]string{"type": "string", "description": "设备名称"},
 									"host":        map[string]string{"type": "string", "description": "IP地址"},
-									"vendor":      map[string]string{"type": "string", "description": "厂商: huawei, h3c, cisco, ruijie, juniper, hpe, zte, maipu"},
-									"device_tier": map[string]string{"type": "string", "description": "网络层级: core, aggregation, access"},
+									"device_type": map[string]string{"type": "string", "description": "设备类型: switch, router, firewall, wireless, loadbalancer"},
+									"vendor":      map[string]string{"type": "string", "description": "厂商: huawei, h3c, cisco, ruijie, juniper, hpe, zte, maipu, aruba, fortinet, paloalto"},
 									"community":   map[string]string{"type": "string", "description": "SNMP团体字符串"},
 								},
-								"required": []string{"name", "host", "vendor"},
+								"required": []string{"name", "host", "device_type", "vendor"},
 							},
 						},
-						"metrics": map[string]interface{}{
+						"metric_categories": map[string]interface{}{
 							"type":        "array",
-							"description": "监控指标列表，可选: cpu, memory, interface, port_status, port_errors, port_traffic, vlan, stp, lldp, ospf, bgp, arp, dhcp, acl, stack, poe, optics, environment, system, all。留空则使用默认指标(cpu,memory,interface,system)",
+							"description": "指标类别: basic(基础), port(端口), hardware(硬件), l2(二层), l3(三层), security(安全), wireless(无线), qos(QoS)。推荐组合: basic+port",
 							"items":       map[string]string{"type": "string"},
 						},
 						"interval": map[string]interface{}{
@@ -1024,51 +1029,200 @@ func (c *Chat) toolGenerateVMwareConfig(args string) (string, error) {
 
 // toolListNetworkMetrics 列出网络设备支持的监控指标
 func (c *Chat) toolListNetworkMetrics(args string) (string, error) {
-	metrics := []struct {
+	var params struct {
+		DeviceType string `json:"device_type"`
+	}
+	json.Unmarshal([]byte(args), &params)
+	
+	var sb strings.Builder
+	sb.WriteString("📡 网络设备监控指标分类\n\n")
+	
+	// 按类别分组
+	categories := []struct {
 		Name        string
 		Description string
-		OIDs        string
-		Vendors     string
+		Icon        string
+		Metrics     []struct {
+			Name        string
+			Description string
+			OIDHint     string
+			DeviceTypes []string
+		}
 	}{
-		{"cpu", "CPU 使用率", "hrProcessorLoad / 厂商私有MIB", "全部厂商"},
-		{"memory", "内存使用率", "hrMemory / 厂商私有MIB", "全部厂商"},
-		{"interface", "接口基本信息", "ifTable / ifXTable", "全部厂商"},
-		{"port_status", "端口状态 (up/down)", "ifOperStatus / ifAdminStatus", "全部厂商"},
-		{"port_traffic", "端口流量 (in/out)", "ifHCInOctets / ifHCOutOctets", "全部厂商"},
-		{"port_errors", "端口错误包", "ifInErrors / ifOutErrors / ifInDiscards", "全部厂商"},
-		{"vlan", "VLAN 信息", "IEEE8021-Q-BRIDGE-MIB", "全部厂商"},
-		{"stp", "生成树状态", "BRIDGE-MIB / RSTP-MIB", "全部厂商"},
-		{"lldp", "LLDP 邻居发现", "LLDP-MIB", "全部厂商"},
-		{"cdp", "CDP 邻居发现 (Cisco)", "CISCO-CDP-MIB", "Cisco"},
-		{"ndp", "NDP 邻居发现 (华为)", "HW-NDP-MIB", "Huawei"},
-		{"lnp", "LNP 邻居发现 (华三)", "HH3C-LNP-MIB", "H3C"},
-		{"ospf", "OSPF 邻居状态", "OSPF-MIB / OSPF-TRAP-MIB", "全部厂商"},
-		{"bgp", "BGP 对等体状态", "BGP4-MIB", "全部厂商"},
-		{"arp", "ARP 表", "ipNetToMediaTable", "全部厂商"},
-		{"dhcp", "DHCP 统计", "CISCO-DHCP-SNOOPING-MIB", "Cisco/Huawei/H3C"},
-		{"acl", "ACL 匹配计数", "CISCO-ACL-MIB / 厂商私有", "Cisco/Huawei/H3C"},
-		{"stack", "堆叠状态", "CISCO-STACK-MIB / 厂商私有", "Cisco/Huawei/H3C"},
-		{"poe", "PoE 功率", "POE-MIB / 厂商私有", "支持PoE的交换机"},
-		{"optics", "光模块信息", "ENTITY-SENSOR-MIB / 厂商私有", "带光模块设备"},
-		{"environment", "环境 (温度/风扇/电源)", "ENTITY-SENSOR-MIB / 厂商私有", "全部厂商"},
-		{"system", "系统信息", "sysDescr / sysUpTime / sysName", "全部厂商"},
+		{
+			Name: "basic", Description: "基础指标", Icon: "📊",
+			Metrics: []struct {
+				Name        string
+				Description string
+				OIDHint     string
+				DeviceTypes []string
+			}{
+				{"system", "系统信息 (描述/运行时间/名称)", "sysDescr/sysUpTime/sysName", []string{"all"}},
+				{"cpu", "CPU 使用率", "hrProcessorLoad/厂商私有MIB", []string{"all"}},
+				{"memory", "内存使用率", "hrMemory/厂商私有MIB", []string{"all"}},
+			},
+		},
+		{
+			Name: "port", Description: "端口指标", Icon: "🔌",
+			Metrics: []struct {
+				Name        string
+				Description string
+				OIDHint     string
+				DeviceTypes []string
+			}{
+				{"interface", "接口基本信息 (类型/速率/MTU)", "ifTable/ifXTable", []string{"all"}},
+				{"port_status", "端口状态 (up/down/admin)", "ifOperStatus/ifAdminStatus", []string{"switch", "router"}},
+				{"port_traffic", "端口流量 (入/出字节/包)", "ifHCInOctets/ifHCOutOctets", []string{"switch", "router"}},
+				{"port_errors", "端口错误 (CRC/丢包/冲突)", "ifInErrors/ifOutErrors/ifInDiscards", []string{"switch", "router"}},
+				{"optics", "光模块 (温度/功率/波长)", "ENTITY-SENSOR-MIB", []string{"switch", "router"}},
+			},
+		},
+		{
+			Name: "hardware", Description: "硬件指标", Icon: "🖥️",
+			Metrics: []struct {
+				Name        string
+				Description string
+				OIDHint     string
+				DeviceTypes []string
+			}{
+				{"environment", "环境传感器 (温度/风扇/电源)", "ENTITY-SENSOR-MIB/厂商私有", []string{"switch", "router", "firewall"}},
+				{"stack", "堆叠状态 (成员/端口)", "CISCO-STACK-MIB/厂商私有", []string{"switch"}},
+				{"poe", "PoE 功率/端口状态", "POE-MIB/厂商私有", []string{"switch"}},
+			},
+		},
+		{
+			Name: "l2", Description: "二层协议", Icon: "🔄",
+			Metrics: []struct {
+				Name        string
+				Description string
+				OIDHint     string
+				DeviceTypes []string
+			}{
+				{"vlan", "VLAN 信息", "Q-BRIDGE-MIB", []string{"switch"}},
+				{"stp", "生成树状态", "BRIDGE-MIB/RSTP-MIB", []string{"switch"}},
+				{"lldp", "LLDP 邻居发现", "LLDP-MIB", []string{"all"}},
+				{"lacp", "链路聚合状态", "IEEE8023-LAG-MIB", []string{"switch"}},
+			},
+		},
+		{
+			Name: "l3", Description: "三层协议", Icon: "🌐",
+			Metrics: []struct {
+				Name        string
+				Description string
+				OIDHint     string
+				DeviceTypes []string
+			}{
+				{"routes", "路由表统计", "ipRouteTable", []string{"router", "firewall", "switch"}},
+				{"ospf", "OSPF 邻居/区域状态", "OSPF-MIB", []string{"router", "switch"}},
+				{"bgp", "BGP 对等体状态", "BGP4-MIB", []string{"router"}},
+				{"vrrp", "VRRP/HSRP 状态", "VRRP-MIB/HSRP-MIB", []string{"router", "firewall"}},
+				{"arp", "ARP 表统计", "ipNetToMediaTable", []string{"all"}},
+			},
+		},
+		{
+			Name: "security", Description: "安全指标", Icon: "🔒",
+			Metrics: []struct {
+				Name        string
+				Description string
+				OIDHint     string
+				DeviceTypes []string
+			}{
+				{"acl", "ACL 匹配计数", "CISCO-ACL-MIB/厂商私有", []string{"firewall", "router", "switch"}},
+				{"nat", "NAT 连接/转换统计", "NAT-MIB/厂商私有", []string{"firewall", "router"}},
+				{"vpn", "VPN 隧道状态/流量", "厂商私有MIB", []string{"firewall", "router"}},
+			},
+		},
+		{
+			Name: "wireless", Description: "无线指标", Icon: "📶",
+			Metrics: []struct {
+				Name        string
+				Description string
+				OIDHint     string
+				DeviceTypes []string
+			}{
+				{"ap_status", "AP 在线状态", "IEEE802.11-MIB/厂商私有", []string{"wireless"}},
+				{"wireless", "无线客户端/信道/功率", "厂商私有MIB", []string{"wireless"}},
+				{"ssid", "SSID 统计", "厂商私有MIB", []string{"wireless"}},
+			},
+		},
+		{
+			Name: "qos", Description: "QoS 指标", Icon: "⚡",
+			Metrics: []struct {
+				Name        string
+				Description string
+				OIDHint     string
+				DeviceTypes []string
+			}{
+				{"qos", "QoS 队列统计", "CISCO-CLASS-BASED-QOS-MIB", []string{"router", "switch"}},
+				{"dhcp", "DHCP 统计", "CISCO-DHCP-SNOOPING-MIB", []string{"switch"}},
+			},
+		},
 	}
-
-	var sb strings.Builder
-	sb.WriteString("📡 网络设备支持的监控指标:\n\n")
-	sb.WriteString("| 指标 | 说明 | OID 来源 | 支持厂商 |\n")
-	sb.WriteString("|:-----|:-----|:---------|:---------|\n")
 	
-	for _, m := range metrics {
-		sb.WriteString(fmt.Sprintf("| `%s` | %s | %s | %s |\n", m.Name, m.Description, m.OIDs, m.Vendors))
+	for _, cat := range categories {
+		// 如果指定了设备类型，过滤相关指标
+		showCategory := true
+		if params.DeviceType != "" && params.DeviceType != "all" {
+			hasRelevant := false
+			for _, m := range cat.Metrics {
+				for _, dt := range m.DeviceTypes {
+					if dt == "all" || dt == params.DeviceType {
+						hasRelevant = true
+						break
+					}
+				}
+				if hasRelevant {
+					break
+				}
+			}
+			showCategory = hasRelevant
+		}
+		
+		if !showCategory {
+			continue
+		}
+		
+		sb.WriteString(fmt.Sprintf("### %s %s - %s\n", cat.Icon, cat.Name, cat.Description))
+		sb.WriteString("| 指标 | 说明 | 适用设备 |\n")
+		sb.WriteString("|:-----|:-----|:---------|\n")
+		
+		for _, m := range cat.Metrics {
+			// 过滤设备类型
+			if params.DeviceType != "" && params.DeviceType != "all" {
+				relevant := false
+				for _, dt := range m.DeviceTypes {
+					if dt == "all" || dt == params.DeviceType {
+						relevant = true
+						break
+					}
+				}
+				if !relevant {
+					continue
+				}
+			}
+			
+			deviceTypes := strings.Join(m.DeviceTypes, "/")
+			if deviceTypes == "all" {
+				deviceTypes = "全部"
+			}
+			sb.WriteString(fmt.Sprintf("| `%s` | %s | %s |\n", m.Name, m.Description, deviceTypes))
+		}
+		sb.WriteString("\n")
 	}
 	
-	sb.WriteString("\n**使用示例:**\n")
+	sb.WriteString("---\n\n")
+	sb.WriteString("**推荐组合:**\n")
 	sb.WriteString("```\n")
-	sb.WriteString(">>> 帮我监控华为核心交换机，需要 cpu, memory, port_traffic, port_errors\n")
+	sb.WriteString("交换机: basic + port + hardware + l2\n")
+	sb.WriteString("路由器: basic + port + hardware + l3\n")
+	sb.WriteString("防火墙: basic + port + hardware + security\n")
+	sb.WriteString("无线:   basic + port + wireless\n")
+	sb.WriteString("```\n\n")
+	sb.WriteString("**使用示例:**\n")
 	sb.WriteString("```\n")
-	sb.WriteString("\n**默认指标:** cpu, memory, interface, system\n")
-	sb.WriteString("**全量监控:** 使用 `all` 或 `metrics: [\"all\"]`\n")
+	sb.WriteString(">>> 帮我监控华为核心交换机，指标: basic, port, hardware, l2\n")
+	sb.WriteString(">>> 帮我监控 Cisco 路由器，需要 OSPF 和 BGP 状态\n")
+	sb.WriteString("```\n")
 	
 	return sb.String(), nil
 }
@@ -1079,28 +1233,41 @@ func (c *Chat) toolGenerateNetworkConfig(args string) (string, error) {
 		Devices []struct {
 			Name       string `json:"name"`
 			Host       string `json:"host"`
+			DeviceType string `json:"device_type"`
 			Vendor     string `json:"vendor"`
-			DeviceTier string `json:"device_tier"`
 			Community  string `json:"community"`
 		} `json:"devices"`
-		Metrics   []string `json:"metrics"`
-		Interval  string   `json:"interval"`
+		MetricCategories []string `json:"metric_categories"`
+		Interval         string   `json:"interval"`
 	}
 	
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", err
 	}
 	
-	// 默认指标
-	metrics := params.Metrics
-	if len(metrics) == 0 {
-		metrics = []string{"cpu", "memory", "interface", "system"}
+	// 根据类别映射到具体指标
+	categoryMetrics := map[string][]string{
+		"basic":    {"system", "cpu", "memory"},
+		"port":     {"interface", "port_status", "port_traffic", "port_errors"},
+		"hardware": {"environment"},
+		"l2":       {"vlan", "stp", "lldp"},
+		"l3":       {"routes", "arp"},
+		"security": {"acl"},
+		"wireless": {"wireless"},
+		"qos":      {"qos"},
 	}
 	
-	// 处理 "all"
-	if len(metrics) == 1 && metrics[0] == "all" {
-		metrics = []string{"cpu", "memory", "interface", "port_status", "port_traffic", 
-			"port_errors", "vlan", "stp", "lldp", "environment", "system"}
+	// 收集指标
+	metrics := []string{}
+	for _, cat := range params.MetricCategories {
+		if m, ok := categoryMetrics[cat]; ok {
+			metrics = append(metrics, m...)
+		}
+	}
+	
+	// 默认指标
+	if len(metrics) == 0 {
+		metrics = []string{"system", "cpu", "memory", "interface"}
 	}
 	
 	interval := params.Interval
@@ -1115,7 +1282,9 @@ func (c *Chat) toolGenerateNetworkConfig(args string) (string, error) {
 	
 	var sb strings.Builder
 	sb.WriteString("=== 📡 网络设备 SNMP 监控配置 ===\n\n")
-	sb.WriteString(fmt.Sprintf("监控指标: %s\n", strings.Join(metrics, ", ")))
+	sb.WriteString(fmt.Sprintf("设备类型: %s\n", params.Devices[0].DeviceType))
+	sb.WriteString(fmt.Sprintf("监控类别: %s\n", strings.Join(params.MetricCategories, ", ")))
+	sb.WriteString(fmt.Sprintf("具体指标: %s\n", strings.Join(metrics, ", ")))
 	sb.WriteString(fmt.Sprintf("采集间隔: %s\n\n", interval))
 	
 	// 1. 生成 vmagent File SD JSON
@@ -1129,20 +1298,13 @@ func (c *Chat) toolGenerateNetworkConfig(args string) (string, error) {
 		target := map[string]interface{}{
 			"targets": []string{dev.Host},
 			"labels": map[string]string{
-				"job":        "snmp",
-				"instance":   dev.Name,
-				"device_type": "switch",
-				"community":  community,
+				"job":         "snmp",
+				"instance":    dev.Name,
+				"device_type": dev.DeviceType,
+				"vendor":      dev.Vendor,
+				"community":   community,
 			},
 		}
-		
-		if dev.DeviceTier != "" {
-			target["labels"].(map[string]string)["device_tier"] = dev.DeviceTier
-		}
-		if dev.Vendor != "" {
-			target["labels"].(map[string]string)["vendor"] = dev.Vendor
-		}
-		
 		targets = append(targets, target)
 	}
 	
