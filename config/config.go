@@ -10,11 +10,57 @@ import (
 
 // Config 全局配置
 type Config struct {
-	Global   GlobalConfig   `toml:"global"`
-	Log      LogConfig      `toml:"log"`
-	AI       AIConfig       `toml:"ai"`
-	MIB      MIBConfig      `toml:"mib"`
+	Global    GlobalConfig    `toml:"global"`
+	Log       LogConfig       `toml:"log"`
+	AI        AIConfig        `toml:"ai"`
+	MIB       MIBConfig       `toml:"mib"`
 	Generator GeneratorConfig `toml:"generator"`
+	Notify    NotifyConfig    `toml:"notify"`
+	Agent     AgentConfig     `toml:"agent"`
+}
+
+// NotifyConfig 通知配置
+type NotifyConfig struct {
+	Console   *ConsoleNotifyConfig   `toml:"console,omitempty"`
+	WebAPI    *WebAPINotifyConfig    `toml:"webapi,omitempty"`
+	Flashduty *FlashdutyNotifyConfig `toml:"flashduty,omitempty"`
+	PagerDuty *PagerDutyNotifyConfig `toml:"pagerduty,omitempty"`
+}
+
+// ConsoleNotifyConfig 控制台通知配置
+type ConsoleNotifyConfig struct {
+	Enabled bool `toml:"enabled"`
+	Color   bool `toml:"color"`
+}
+
+// WebAPINotifyConfig WebAPI 通知配置
+type WebAPINotifyConfig struct {
+	Enabled bool              `toml:"enabled"`
+	URL     string            `toml:"url"`
+	Method  string            `toml:"method"`
+	Timeout string            `toml:"timeout"`
+	Headers map[string]string `toml:"headers"`
+}
+
+// FlashdutyNotifyConfig Flashduty 通知配置
+type FlashdutyNotifyConfig struct {
+	Enabled        bool   `toml:"enabled"`
+	IntegrationKey string `toml:"integration_key"`
+}
+
+// PagerDutyNotifyConfig PagerDuty 通知配置
+type PagerDutyNotifyConfig struct {
+	Enabled    bool   `toml:"enabled"`
+	RoutingKey string `toml:"routing_key"`
+}
+
+// AgentConfig Agent 配置
+type AgentConfig struct {
+	Enabled       bool              `toml:"enabled"`
+	CheckInterval string            `toml:"check_interval"`
+	Plugins       map[string]any    `toml:"plugins"`
+	AutoDiagnose  bool              `toml:"auto_diagnose"`
+	Labels        map[string]string `toml:"labels"`
 }
 
 // GlobalConfig 全局配置

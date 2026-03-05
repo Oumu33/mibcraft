@@ -198,7 +198,70 @@ func (g *Generator) marshalSNMPExporterYAML(config *types.SNMPExporterConfig) (s
 	return sb.String(), nil
 }
 
-// GenerateBoth 同时生成两种配置
+// GenerateTelegrafConfig 生成 Telegraf inputs.snmp TOML 配置
+func (g *Generator) GenerateTelegrafConfig(objects []*types.MIBObject, req *types.ConfigRequest) (string, error) {
+	var sb strings.Builder
+	
+	sb.WriteString("# Telegraf SNMP 输入插件配置\n")
+	sb.WriteString("# 由 mibcraft 自动生成\n\n")
+	sb.WriteString("[[inputs.snmp]]\n")
+	
+	// 基础配置
+	sb.WriteString(fmt.Sprintf("  agents = [\"udp://127.0.0.1:161\"]\n"))
+	sb.WriteString(fmt.Sprintf("  community = \"%s\"\n", g.config.DefaultCommunity))
+	sb.WriteString(fmt.Sprintf("  version = %d\n", g.config.DefaultVersion))
+	sb.WriteString(fmt.Sprintf("  timeout = \"5s\"\n"))
+	sb.WriteString(fmt.Sprintf("  retries = 3\n"))
+	sb.WriteString(fmt.Sprintf("  max_repetitions = 50\n"))
+	
+	// 全局标签
+	if len(req.Labels) > 0 {
+		sb.WriteString("  [inputs.snmp.tags]\n")
+		for k, v := range req.Labels {
+			sb.WriteString(fmt.Sprintf("    %s = \"%s\"\n", k, v))
+		}
+	}
+	
+	// 为每个对象生成字段配置
+	for _, obj := range objects {
+		if obj.Access != "read-only" && obj.Access != "read-write" {
+			continue
+		}
+		
+		metricName := obj.Name
+		if name, ok := req.MetricNames[obj.OID]; ok {
+			metricName = name
+		}
+		
+		sb.WriteString("\n  [[inputs.snmp.field]]\n")
+		sb.WriteString(fmt.Sprintf("    name = \"%s\"\n", g.sanitizeMetricName(metricName)))
+		sb.WriteString(fmt.Sprintf("    oid = \"%s\"\n", obj.OID))
+		
+		// 转换类型
+		conversion := g.mapTypeToTelegrafConversion(obj.Type)
+		if conversion != "" {
+			sb.WriteString(fmt.Sprintf("    conversion = \"%s\"\n", conversion))
+		}
+	}
+	
+	return sb.String(), nil
+}
+
+// mapTypeToTelegrafConversion 映射类型到 Telegraf 转换类型
+func (g *Generator) mapTypeToTelegrafConversion(mibType string) string {
+	switch mibType {
+	case "counter":
+		return "counter"
+	case "timeticks":
+		return "duration"
+	case "ipaddress":
+		return "ipaddr"
+	default:
+		return ""
+	}
+}
+
+// GenerateBoth 同时生成多种配置
 func (g *Generator) GenerateBoth(objects []*types.MIBObject, req *types.ConfigRequest) (*types.ConfigResult, error) {
 	result := &types.ConfigResult{
 		MIBObjectsUsed: make([]string, 0),
@@ -226,6 +289,36 @@ func (g *Generator) GenerateBoth(objects []*types.MIBObject, req *types.ConfigRe
 			return nil, fmt.Errorf("生成 SNMP Exporter 配置失败: %w", err)
 		}
 		result.SNMPExporterConfig = snmpExporter
+	}
+	
+	// 生成 Telegraf 配置
+	if req.Format == "telegraf" || req.Format == "both" {
+		telegraf, err := g.GenerateTelegrafConfig(objects, req)
+		if err != nil {
+			return nil, fmt.Errorf("生成 Telegraf 配置失败: %w", err)
+		}
+		result.TelegrafConfig = telegraf
+	}
+	
+	// 如果是 all，生成全部三种
+	if req.Format == "all" {
+		categraf, err := g.GenerateCategrafConfig(objects, req)
+		if err != nil {
+			return nil, fmt.Errorf("生成 Categraf 配置失败: %w", err)
+		}
+		result.CategrafConfig = categraf
+		
+		snmpExporter, err := g.GenerateSNMPExporterConfig(objects, req)
+		if err != nil {
+			return nil, fmt.Errorf("生成 SNMP Exporter 配置失败: %w", err)
+		}
+		result.SNMPExporterConfig = snmpExporter
+		
+		telegraf, err := g.GenerateTelegrafConfig(objects, req)
+		if err != nil {
+			return nil, fmt.Errorf("生成 Telegraf 配置失败: %w", err)
+		}
+		result.TelegrafConfig = telegraf
 	}
 	
 	return result, nil

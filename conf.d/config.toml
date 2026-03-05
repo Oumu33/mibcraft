@@ -45,3 +45,60 @@ output_dir = "./output"
 default_community = "public"
 default_version = 2
 default_interval = "30s"
+
+# ===========================================
+# Agent 模式配置
+# ===========================================
+[agent]
+enabled = true
+check_interval = "30s"
+auto_diagnose = true
+
+[agent.labels]
+instance = "mibcraft-agent-01"
+
+# Agent 插件配置示例
+# [agent.plugins.snmp]
+# enabled = true
+# targets = ["192.168.1.1:161"]
+# community = "public"
+# version = 2
+
+# [agent.plugins.mib_validator]
+# enabled = true
+# mib_dirs = ["./mibs"]
+
+# [agent.plugins.oid_monitor]
+# enabled = false
+
+# [agent.plugins.config_gen]
+# enabled = false
+# watch_changes = true
+
+# ===========================================
+# 通知配置
+# ===========================================
+
+# 控制台通知（默认启用）
+[notify.console]
+enabled = true
+color = true
+
+# WebAPI 通知
+# [notify.webapi]
+# enabled = false
+# url = "https://your-webhook.example.com/alert"
+# method = "POST"
+# timeout = "10s"
+# [notify.webapi.headers]
+# Authorization = "Bearer ${WEBAPI_TOKEN}"
+
+# Flashduty 通知
+# [notify.flashduty]
+# enabled = false
+# integration_key = "your-integration-key"
+
+# PagerDuty 通知
+# [notify.pagerduty]
+# enabled = false
+# routing_key = "your-routing-key"

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/Oumu33/mibcraft/agent"
+	"github.com/Oumu33/mibcraft/agent/plugins"
 	"github.com/Oumu33/mibcraft/chat"
 	"github.com/Oumu33/mibcraft/config"
 	"github.com/Oumu33/mibcraft/generator"
@@ -26,6 +28,7 @@ func main() {
 	var (
 		configPath  string
 		showVersion bool
+		runMode     string
 		genMode     string
 		mibFile     string
 		oids        string
@@ -34,7 +37,8 @@ func main() {
 
 	flag.StringVar(&configPath, "config", "", "配置文件路径")
 	flag.BoolVar(&showVersion, "version", false, "显示版本信息")
-	flag.StringVar(&genMode, "gen", "", "生成模式: categraf, snmp_exporter, both")
+	flag.StringVar(&runMode, "mode", "chat", "运行模式: agent, chat, cli")
+	flag.StringVar(&genMode, "gen", "", "生成模式: categraf, snmp_exporter, telegraf, all")
 	flag.StringVar(&mibFile, "mib", "", "MIB 文件路径")
 	flag.StringVar(&oids, "oids", "", "OID 列表 (逗号分隔)")
 	flag.StringVar(&outputDir, "output", "", "输出目录")
@@ -56,8 +60,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 命令行生成模式
-	if genMode != "" && mibFile != "" && oids != "" {
+	// CLI 生成模式
+	if runMode == "cli" || (genMode != "" && mibFile != "" && oids != "") {
 		if err := generateFromCLI(cfg, genMode, mibFile, oids, outputDir); err != nil {
 			fmt.Fprintf(os.Stderr, "生成配置失败: %v\n", err)
 			os.Exit(1)
@@ -65,7 +69,16 @@ func main() {
 		return
 	}
 
-	// 交互式对话模式
+	// Agent 模式
+	if runMode == "agent" {
+		if err := runAgentMode(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "Agent 错误: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// 默认交互式对话模式
 	if err := runInteractiveMode(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "错误: %v\n", err)
 		os.Exit(1)
@@ -170,4 +183,27 @@ func runInteractiveMode(cfg *config.Config) error {
 	defer c.Stop()
 
 	return c.Start(ctx)
+}
+
+// runAgentMode 运行 Agent 模式
+func runAgentMode(cfg *config.Config) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 创建 Agent
+	ag := agent.NewAgent(cfg)
+
+	// 注册内置插件
+	ag.RegisterPlugin(plugins.NewSNMPPlugin())
+	ag.RegisterPlugin(plugins.NewMIBValidatorPlugin())
+	ag.RegisterPlugin(plugins.NewOIDMonitorPlugin())
+	ag.RegisterPlugin(plugins.NewConfigGenPlugin())
+
+	fmt.Println("╔════════════════════════════════════════════════════════════╗")
+	fmt.Println("║              MIB-Agent 监控模式                             ║")
+	fmt.Println("╚════════════════════════════════════════════════════════════╝")
+	fmt.Printf("\n已加载插件: %v\n", ag.GetPlugins())
+	fmt.Println("\n按 Ctrl+C 退出...")
+
+	return ag.Start(ctx)
 }

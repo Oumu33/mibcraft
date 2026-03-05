@@ -106,9 +106,49 @@ type ConfigRequest struct {
 
 // ConfigResult 配置生成结果
 type ConfigResult struct {
-	CategrafConfig    string    `json:"categraf_config,omitempty"`
-	SNMPExporterConfig string   `json:"snmp_exporter_config,omitempty"`
-	GeneratedAt       time.Time `json:"generated_at"`
-	MIBObjectsUsed    []string  `json:"mib_objects_used"`
-	Warnings          []string  `json:"warnings,omitempty"`
+	CategrafConfig     string    `json:"categraf_config,omitempty"`
+	SNMPExporterConfig string    `json:"snmp_exporter_config,omitempty"`
+	TelegrafConfig     string    `json:"telegraf_config,omitempty"`
+	GeneratedAt        time.Time `json:"generated_at"`
+	MIBObjectsUsed     []string  `json:"mib_objects_used"`
+	Warnings           []string  `json:"warnings,omitempty"`
+}
+
+// TelegrafConfig Telegraf SNMP 输入插件配置
+type TelegrafConfig struct {
+	Interval     string                  `toml:"interval,omitempty"`
+	NamePrefix   string                  `toml:"name_prefix,omitempty"`
+	NameSuffix   string                  `toml:"name_suffix,omitempty"`
+	Collection   []TelegrafInputConfig   `toml:"-"`
+	Labels       map[string]string       `toml:"tags,omitempty"`
+}
+
+// TelegrafInputConfig Telegraf inputs.snmp 配置
+type TelegrafInputConfig struct {
+	Agents          []string                     `toml:"agents"`
+	Community       string                       `toml:"community,omitempty"`
+	Version         int                          `toml:"version,omitempty"`
+	Timeout         string                       `toml:"timeout,omitempty"`
+	Retries         int                          `toml:"retries,omitempty"`
+	MaxRepetitions  int                          `toml:"max_repetitions,omitempty"`
+	Fields          []TelegrafFieldConfig        `toml:"field"`
+	Tables          []TelegrafTableConfig        `toml:"table,omitempty"`
+	Tags            map[string]string            `toml:"tags,omitempty"`
+	NameOverride    string                       `toml:"name_override,omitempty"`
+	NamePrefix      string                       `toml:"name_prefix,omitempty"`
+}
+
+// TelegrafFieldConfig Telegraf 字段配置
+type TelegrafFieldConfig struct {
+	Name       string `toml:"name"`
+	Oid        string `toml:"oid"`
+	Conversion string `toml:"conversion,omitempty"`
+}
+
+// TelegrafTableConfig Telegraf 表配置（用于表格型 OID）
+type TelegrafTableConfig struct {
+	Name       string                  `toml:"name"`
+	Oid        string                  `toml:"oid,omitempty"`
+	Fields     []TelegrafFieldConfig   `toml:"field"`
+	InheritTags []string               `toml:"inherit_tags,omitempty"`
 }
