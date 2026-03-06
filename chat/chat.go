@@ -491,7 +491,7 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "generate_hardware_config",
-				Description: "生成服务器硬件监控配置（Redfish/IPMI），支持 Dell、HPE、Lenovo、Supermicro、Fujitsu",
+				Description: "生成服务器硬件监控配置（Redfish/IPMI）。输出格式可选: vmagent, telegraf, redfish_exporter, all。",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -514,6 +514,11 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 								},
 							},
 						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "输出格式: vmagent(File SD), telegraf, redfish_exporter, all。默认: vmagent",
+							"enum":        []string{"vmagent", "telegraf", "redfish_exporter", "all"},
+						},
 					},
 					"required": []string{"device_type", "devices"},
 				},
@@ -523,7 +528,7 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "generate_vmware_config",
-				Description: "生成 VMware vSphere 监控配置（vCenter/ESXi）",
+				Description: "生成 VMware vSphere 监控配置。输出格式可选: vmagent, telegraf, all。",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -539,6 +544,11 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 									"password": map[string]string{"type": "string", "description": "密码"},
 								},
 							},
+						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "输出格式: vmagent, telegraf, all。默认: telegraf",
+							"enum":        []string{"vmagent", "telegraf", "all"},
 						},
 					},
 					"required": []string{"vcenters"},
@@ -667,7 +677,7 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "generate_node_config",
-				Description: "生成 Node Exporter 主机监控配置（Linux/Windows服务器）",
+				Description: "生成主机监控配置。输出格式可选: vmagent(Prometheus File SD), categraf, telegraf, all。根据用户需求选择格式。",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -684,6 +694,11 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 								},
 							},
 						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "输出格式: vmagent, categraf, telegraf, all。默认: vmagent",
+							"enum":        []string{"vmagent", "categraf", "telegraf", "all"},
+						},
 					},
 					"required": []string{"nodes"},
 				},
@@ -693,7 +708,7 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "generate_blackbox_config",
-				Description: "生成 Blackbox Exporter 探测配置（HTTP/ICMP/TCP/DNS探测）",
+				Description: "生成服务探测配置。输出格式可选: vmagent(Prometheus File SD), blackbox。根据用户需求选择格式。",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -710,6 +725,11 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 								},
 							},
 						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "输出格式: vmagent(File SD), blackbox(Blackbox配置), all。默认: vmagent",
+							"enum":        []string{"vmagent", "blackbox", "all"},
+						},
 					},
 					"required": []string{"probes"},
 				},
@@ -719,7 +739,7 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "generate_ipmi_config",
-				Description: "生成 IPMI Exporter 物理服务器监控配置",
+				Description: "生成 IPMI 物理服务器监控配置。输出格式可选: vmagent(File SD), ipmi_exporter, telegraf, all。",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -737,6 +757,11 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 								},
 							},
 						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "输出格式: vmagent, ipmi_exporter, telegraf, all。默认: vmagent",
+							"enum":        []string{"vmagent", "ipmi_exporter", "telegraf", "all"},
+						},
 					},
 					"required": []string{"devices"},
 				},
@@ -746,7 +771,7 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 			Type: openai.ToolTypeFunction,
 			Function: openai.FunctionDefinition{
 				Name:        "generate_proxmox_config",
-				Description: "生成 Proxmox VE 虚拟化平台监控配置",
+				Description: "生成 Proxmox VE 虚拟化平台监控配置。输出格式可选: vmagent, pve_exporter, all。",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -764,6 +789,11 @@ func (c *Chat) getToolDefinitions() []openai.Tool {
 									"token":    map[string]string{"type": "string", "description": "API Token（可选）"},
 								},
 							},
+						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "输出格式: vmagent, pve_exporter, all。默认: vmagent",
+							"enum":        []string{"vmagent", "pve_exporter", "all"},
 						},
 					},
 					"required": []string{"nodes"},
@@ -933,53 +963,85 @@ func (c *Chat) toolGenerateHardwareConfig(args string) (string, error) {
 			Password string `json:"password"`
 			Vendor   string `json:"vendor"`
 		} `json:"devices"`
+		Format string `json:"format"`
 	}
 	
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", err
 	}
 	
+	format := params.Format
+	if format == "" {
+		format = "telegraf"
+	}
+	
+	outputDir := "./output/infra/config"
+	os.MkdirAll(outputDir, 0755)
+	
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("=== %s 硬件监控配置 ===\n\n", strings.ToUpper(params.DeviceType)))
+	sb.WriteString(fmt.Sprintf("输出格式: %s\n\n", format))
 	
-	if params.DeviceType == "redfish" {
-		sb.WriteString("# Telegraf Redfish 配置\n")
-		sb.WriteString("# 由 AI 助手生成\n\n")
-		sb.WriteString("[[inputs.redfish]]\n")
-		sb.WriteString("  interval = \"60s\"\n\n")
-		
-		for _, dev := range params.Devices {
-			sb.WriteString(fmt.Sprintf("  [[inputs.redfish.server]]\n"))
-			sb.WriteString(fmt.Sprintf("    name = \"%s\"\n", dev.Name))
-			sb.WriteString(fmt.Sprintf("    address = \"https://%s\"\n", dev.Host))
-			sb.WriteString(fmt.Sprintf("    username = \"%s\"\n", dev.Username))
-			sb.WriteString(fmt.Sprintf("    password = \"%s\"\n", dev.Password))
-			sb.WriteString("    insecure_skip_verify = true\n")
-			sb.WriteString("    include_metrics = [\"thermal\", \"power\", \"system\", \"storage\"]\n")
-			if dev.Vendor != "" {
-				sb.WriteString(fmt.Sprintf("    [inputs.redfish.server.tags]\n"))
-				sb.WriteString(fmt.Sprintf("      vendor = \"%s\"\n", dev.Vendor))
+	if format == "telegraf" || format == "all" {
+		if params.DeviceType == "redfish" {
+			var cfg strings.Builder
+			cfg.WriteString("# Telegraf Redfish 配置 - 自动生成\n\n")
+			cfg.WriteString("[[inputs.redfish]]\n")
+			cfg.WriteString("interval = \"60s\"\n\n")
+			for _, dev := range params.Devices {
+				cfg.WriteString("  [[inputs.redfish.server]]\n")
+				cfg.WriteString(fmt.Sprintf("    name = \"%s\"\n", dev.Name))
+				cfg.WriteString(fmt.Sprintf("    address = \"https://%s\"\n", dev.Host))
+				cfg.WriteString(fmt.Sprintf("    username = \"%s\"\n", dev.Username))
+				cfg.WriteString(fmt.Sprintf("    password = \"%s\"\n", dev.Password))
+				cfg.WriteString("    insecure_skip_verify = true\n\n")
 			}
-			sb.WriteString("\n")
-		}
-	} else if params.DeviceType == "ipmi" {
-		sb.WriteString("# Telegraf IPMI 配置\n")
-		sb.WriteString("# 由 AI 助手生成\n\n")
-		sb.WriteString("[[inputs.ipmi_sensor]]\n")
-		sb.WriteString("  interval = \"60s\"\n")
-		sb.WriteString("  metric_version = 2\n\n")
-		
-		for _, dev := range params.Devices {
-			sb.WriteString(fmt.Sprintf("  [[inputs.ipmi_sensor.server]]\n"))
-			sb.WriteString(fmt.Sprintf("    host = \"%s\"\n", dev.Host))
-			sb.WriteString(fmt.Sprintf("    username = \"%s\"\n", dev.Username))
-			sb.WriteString(fmt.Sprintf("    password = \"%s\"\n", dev.Password))
-			sb.WriteString("    interface = \"lanplus\"\n")
-			sb.WriteString("    port = 623\n\n")
+			telegrafDir := filepath.Join(outputDir, "telegraf")
+			os.MkdirAll(telegrafDir, 0755)
+			outputPath := filepath.Join(telegrafDir, "telegraf-redfish.conf")
+			os.WriteFile(outputPath, []byte(cfg.String()), 0644)
+			sb.WriteString(fmt.Sprintf("✅ Telegraf: %s\n", outputPath))
+		} else {
+			var cfg strings.Builder
+			cfg.WriteString("# Telegraf IPMI 配置 - 自动生成\n\n")
+			cfg.WriteString("[[inputs.ipmi_sensor]]\n")
+			cfg.WriteString("interval = \"60s\"\n\n")
+			for _, dev := range params.Devices {
+				cfg.WriteString("  [[inputs.ipmi_sensor.server]]\n")
+				cfg.WriteString(fmt.Sprintf("    host = \"%s\"\n", dev.Host))
+				cfg.WriteString(fmt.Sprintf("    username = \"%s\"\n", dev.Username))
+				cfg.WriteString(fmt.Sprintf("    password = \"%s\"\n", dev.Password))
+				cfg.WriteString("    interface = \"lanplus\"\n\n")
+			}
+			telegrafDir := filepath.Join(outputDir, "telegraf")
+			os.MkdirAll(telegrafDir, 0755)
+			outputPath := filepath.Join(telegrafDir, "telegraf-ipmi.conf")
+			os.WriteFile(outputPath, []byte(cfg.String()), 0644)
+			sb.WriteString(fmt.Sprintf("✅ Telegraf: %s\n", outputPath))
 		}
 	}
 	
-	sb.WriteString("\n💡 将配置添加到 telegraf.conf 或 telegraf-ipmi.conf 中")
+	if format == "vmagent" || format == "all" {
+		targets := []map[string]interface{}{}
+		for _, dev := range params.Devices {
+			targets = append(targets, map[string]interface{}{
+				"targets": []string{dev.Host},
+				"labels": map[string]string{
+					"job":         "hardware",
+					"instance":    dev.Name,
+					"device_type": params.DeviceType,
+					"vendor":      dev.Vendor,
+				},
+			})
+		}
+		targetsDir := filepath.Join(outputDir, "vmagent/targets")
+		os.MkdirAll(targetsDir, 0755)
+		outputPath := filepath.Join(targetsDir, "hardware-devices.json")
+		data, _ := json.MarshalIndent(targets, "", "  ")
+		os.WriteFile(outputPath, data, 0644)
+		sb.WriteString(fmt.Sprintf("✅ vmagent File SD: %s\n", outputPath))
+	}
+	
 	return sb.String(), nil
 }
 
@@ -992,43 +1054,64 @@ func (c *Chat) toolGenerateVMwareConfig(args string) (string, error) {
 			Username string `json:"username"`
 			Password string `json:"password"`
 		} `json:"vcenters"`
+		Format string `json:"format"`
 	}
 	
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", err
 	}
 	
-	var sb strings.Builder
-	sb.WriteString("=== VMware vSphere 监控配置 ===\n\n")
-	sb.WriteString("# Telegraf VMware 配置\n")
-	sb.WriteString("# 由 AI 助手生成\n\n")
-	sb.WriteString("[[inputs.vsphere]]\n")
-	sb.WriteString("  interval = \"60s\"\n")
-	sb.WriteString("  timeout = \"60s\"\n\n")
-	
-	for _, vc := range params.VCenters {
-		sb.WriteString(fmt.Sprintf("  # vCenter: %s\n", vc.Name))
-		sb.WriteString(fmt.Sprintf("  vcenters = [\"%s\"]\n", vc.URL))
-		sb.WriteString(fmt.Sprintf("  username = \"%s\"\n", vc.Username))
-		sb.WriteString(fmt.Sprintf("  password = \"%s\"\n", vc.Password))
-		sb.WriteString("  insecure_skip_verify = true\n\n")
+	format := params.Format
+	if format == "" {
+		format = "telegraf"
 	}
 	
-	sb.WriteString("  # 虚拟机指标\n")
-	sb.WriteString("  vm_metric_include = [\n")
-	sb.WriteString("    \"cpu.usage.average\",\n")
-	sb.WriteString("    \"mem.usage.average\",\n")
-	sb.WriteString("    \"disk.usage.average\",\n")
-	sb.WriteString("    \"net.usage.average\",\n")
-	sb.WriteString("  ]\n\n")
+	outputDir := "./output/infra/config"
+	os.MkdirAll(outputDir, 0755)
 	
-	sb.WriteString("  # ESXi 主机指标\n")
-	sb.WriteString("  host_metric_include = [\n")
-	sb.WriteString("    \"cpu.usage.average\",\n")
-	sb.WriteString("    \"mem.usage.average\",\n")
-	sb.WriteString("  ]\n")
+	var sb strings.Builder
+	sb.WriteString("=== ☁️ VMware vSphere 监控配置 ===\n\n")
+	sb.WriteString(fmt.Sprintf("输出格式: %s\n\n", format))
 	
-	sb.WriteString("\n💡 将配置添加到 telegraf.conf 中")
+	if format == "telegraf" || format == "all" {
+		var cfg strings.Builder
+		cfg.WriteString("# Telegraf VMware 配置 - 自动生成\n\n")
+		cfg.WriteString("[[inputs.vsphere]]\n")
+		cfg.WriteString("interval = \"60s\"\n\n")
+		for _, vc := range params.VCenters {
+			cfg.WriteString("  [[inputs.vsphere.vcenters]]\n")
+			cfg.WriteString(fmt.Sprintf("    name = \"%s\"\n", vc.Name))
+			cfg.WriteString(fmt.Sprintf("    url = \"%s\"\n", vc.URL))
+			cfg.WriteString(fmt.Sprintf("    username = \"%s\"\n", vc.Username))
+			cfg.WriteString(fmt.Sprintf("    password = \"%s\"\n", vc.Password))
+			cfg.WriteString("    insecure = true\n\n")
+		}
+		telegrafDir := filepath.Join(outputDir, "telegraf")
+		os.MkdirAll(telegrafDir, 0755)
+		outputPath := filepath.Join(telegrafDir, "vmware.conf")
+		os.WriteFile(outputPath, []byte(cfg.String()), 0644)
+		sb.WriteString(fmt.Sprintf("✅ Telegraf: %s\n", outputPath))
+	}
+	
+	if format == "vmagent" || format == "all" {
+		targets := []map[string]interface{}{}
+		for _, vc := range params.VCenters {
+			targets = append(targets, map[string]interface{}{
+				"targets": []string{vc.URL},
+				"labels": map[string]string{
+					"job":      "vmware",
+					"instance": vc.Name,
+				},
+			})
+		}
+		targetsDir := filepath.Join(outputDir, "vmagent/targets")
+		os.MkdirAll(targetsDir, 0755)
+		outputPath := filepath.Join(targetsDir, "vmware-vcenters.json")
+		data, _ := json.MarshalIndent(targets, "", "  ")
+		os.WriteFile(outputPath, data, 0644)
+		sb.WriteString(fmt.Sprintf("✅ vmagent File SD: %s\n", outputPath))
+	}
+	
 	return sb.String(), nil
 }
 
@@ -1820,84 +1903,150 @@ func (c *Chat) toolGenerateNodeConfig(args string) (string, error) {
 			Port   string `json:"port"`
 			Labels string `json:"labels"`
 		} `json:"nodes"`
+		Format string `json:"format"`
 	}
 
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", fmt.Errorf("解析参数失败: %w", err)
 	}
 
-	outputDir := "./output/infra/config/vmagent/targets"
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return "", fmt.Errorf("创建目录失败: %w", err)
+	format := params.Format
+	if format == "" {
+		format = "vmagent"
 	}
 
-	// 生成 File SD 配置
-	var targets []map[string]interface{}
-	for _, node := range params.Nodes {
-		port := node.Port
-		if port == "" {
-			port = "9100"
-		}
+	outputDir := "./output/infra/config"
+	os.MkdirAll(outputDir, 0755)
 
-		target := map[string]interface{}{
-			"targets": []string{fmt.Sprintf("%s:%s", node.Host, port)},
-			"labels": map[string]string{
-				"job":    "node-exporter",
-				"instance": node.Name,
-				"host":   node.Host,
-			},
-		}
+	var sb strings.Builder
+	sb.WriteString("=== 🖥️ 主机监控配置 ===\n\n")
+	sb.WriteString(fmt.Sprintf("输出格式: %s\n", format))
+	sb.WriteString(fmt.Sprintf("节点数量: %d\n\n", len(params.Nodes)))
 
-		// 解析额外标签
-		if node.Labels != "" {
-			for _, label := range strings.Split(node.Labels, ",") {
-				parts := strings.SplitN(strings.TrimSpace(label), "=", 2)
-				if len(parts) == 2 {
-					target["labels"].(map[string]string)[parts[0]] = parts[1]
+	// 根据格式生成
+	if format == "vmagent" || format == "all" {
+		targets := []map[string]interface{}{}
+		for _, node := range params.Nodes {
+			port := node.Port
+			if port == "" {
+				port = "9100"
+			}
+			target := map[string]interface{}{
+				"targets": []string{fmt.Sprintf("%s:%s", node.Host, port)},
+				"labels": map[string]string{
+					"job":      "node-exporter",
+					"instance": node.Name,
+				},
+			}
+			if node.Labels != "" {
+				for _, label := range strings.Split(node.Labels, ",") {
+					parts := strings.SplitN(strings.TrimSpace(label), "=", 2)
+					if len(parts) == 2 {
+						target["labels"].(map[string]string)[parts[0]] = parts[1]
+					}
 				}
 			}
+			targets = append(targets, target)
 		}
-
-		targets = append(targets, target)
+		targetsDir := filepath.Join(outputDir, "vmagent/targets")
+		os.MkdirAll(targetsDir, 0755)
+		outputPath := filepath.Join(targetsDir, "node-exporters.json")
+		data, _ := json.MarshalIndent(targets, "", "  ")
+		os.WriteFile(outputPath, data, 0644)
+		sb.WriteString(fmt.Sprintf("✅ vmagent File SD: %s\n", outputPath))
 	}
 
-	data, err := json.MarshalIndent(targets, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("生成 JSON 失败: %w", err)
+	if format == "categraf" || format == "all" {
+		var cfg strings.Builder
+		cfg.WriteString("# Categraf 主机监控配置 - 自动生成\n\n")
+		for _, node := range params.Nodes {
+			port := node.Port
+			if port == "" {
+				port = "9100"
+			}
+			cfg.WriteString(fmt.Sprintf("# %s (%s:%s)\n", node.Name, node.Host, port))
+		}
+		cfg.WriteString("\n[[instances]]\n")
+		cfg.WriteString("urls = [\n")
+		for i, node := range params.Nodes {
+			port := node.Port
+			if port == "" {
+				port = "9100"
+			}
+			cfg.WriteString(fmt.Sprintf("  \"http://%s:%s/metrics\"", node.Host, port))
+			if i < len(params.Nodes)-1 {
+				cfg.WriteString(",")
+			}
+			cfg.WriteString("\n")
+		}
+		cfg.WriteString("]\n")
+		categrafDir := filepath.Join(outputDir, "categraf")
+		os.MkdirAll(categrafDir, 0755)
+		outputPath := filepath.Join(categrafDir, "prometheus.toml")
+		os.WriteFile(outputPath, []byte(cfg.String()), 0644)
+		sb.WriteString(fmt.Sprintf("✅ Categraf: %s\n", outputPath))
 	}
 
-	outputPath := filepath.Join(outputDir, "node-exporters.json")
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
-		return "", fmt.Errorf("写入文件失败: %w", err)
+	if format == "telegraf" || format == "all" {
+		var cfg strings.Builder
+		cfg.WriteString("# Telegraf 主机监控配置 - 自动生成\n\n")
+		cfg.WriteString("[[inputs.prometheus]]\n")
+		cfg.WriteString("urls = [\n")
+		for i, node := range params.Nodes {
+			port := node.Port
+			if port == "" {
+				port = "9100"
+			}
+			cfg.WriteString(fmt.Sprintf("  \"http://%s:%s/metrics\"", node.Host, port))
+			if i < len(params.Nodes)-1 {
+				cfg.WriteString(",")
+			}
+			cfg.WriteString("\n")
+		}
+		cfg.WriteString("]\n")
+		telegrafDir := filepath.Join(outputDir, "telegraf")
+		os.MkdirAll(telegrafDir, 0755)
+		outputPath := filepath.Join(telegrafDir, "prometheus.conf")
+		os.WriteFile(outputPath, []byte(cfg.String()), 0644)
+		sb.WriteString(fmt.Sprintf("✅ Telegraf: %s\n", outputPath))
 	}
 
-	return fmt.Sprintf("✅ Node Exporter 配置已生成: %s\n包含 %d 个节点", outputPath, len(params.Nodes)), nil
+	sb.WriteString("\n🚀 下一步: 将配置部署到对应采集器\n")
+
+	return sb.String(), nil
 }
 
 // toolGenerateBlackboxConfig 生成 Blackbox Exporter 配置
 func (c *Chat) toolGenerateBlackboxConfig(args string) (string, error) {
 	var params struct {
 		Probes []struct {
-			Name    string `json:"name"`
-			Target  string `json:"target"`
-			Module  string `json:"module"`
-			Labels  string `json:"labels"`
+			Name   string `json:"name"`
+			Target string `json:"target"`
+			Module string `json:"module"`
+			Labels string `json:"labels"`
 		} `json:"probes"`
+		Format string `json:"format"`
 	}
 
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", fmt.Errorf("解析参数失败: %w", err)
 	}
 
-	outputDir := "./output/infra/config/vmagent/targets"
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return "", fmt.Errorf("创建目录失败: %w", err)
+	format := params.Format
+	if format == "" {
+		format = "vmagent"
 	}
+
+	outputDir := "./output/infra/config"
+	os.MkdirAll(outputDir, 0755)
+
+	var sb strings.Builder
+	sb.WriteString("=== 🔍 服务探测配置 ===\n\n")
+	sb.WriteString(fmt.Sprintf("输出格式: %s\n\n", format))
 
 	// 分类处理不同探测类型
 	httpTargets := []map[string]interface{}{}
 	icmpTargets := []map[string]interface{}{}
-	tcpTargets := []map[string]interface{}{}
 
 	for _, probe := range params.Probes {
 		module := probe.Module
@@ -1914,55 +2063,45 @@ func (c *Chat) toolGenerateBlackboxConfig(args string) (string, error) {
 			},
 		}
 
-		// 解析额外标签
-		if probe.Labels != "" {
-			for _, label := range strings.Split(probe.Labels, ",") {
-				parts := strings.SplitN(strings.TrimSpace(label), "=", 2)
-				if len(parts) == 2 {
-					target["labels"].(map[string]string)[parts[0]] = parts[1]
-				}
-			}
-		}
-
 		switch {
 		case strings.HasPrefix(module, "http"):
 			httpTargets = append(httpTargets, target)
 		case strings.HasPrefix(module, "icmp"):
 			icmpTargets = append(icmpTargets, target)
-		case strings.HasPrefix(module, "tcp"):
-			tcpTargets = append(tcpTargets, target)
-		default:
-			httpTargets = append(httpTargets, target)
 		}
 	}
 
-	var results []string
+	if format == "vmagent" || format == "all" {
+		targetsDir := filepath.Join(outputDir, "vmagent/targets")
+		os.MkdirAll(targetsDir, 0755)
 
-	// 写入 HTTP 探测配置
-	if len(httpTargets) > 0 {
-		data, _ := json.MarshalIndent(httpTargets, "", "  ")
-		path := filepath.Join(outputDir, "blackbox-http.json")
-		os.WriteFile(path, data, 0644)
-		results = append(results, fmt.Sprintf("HTTP 探测: %d 个 -> %s", len(httpTargets), path))
+		if len(httpTargets) > 0 {
+			data, _ := json.MarshalIndent(httpTargets, "", "  ")
+			path := filepath.Join(targetsDir, "blackbox-http.json")
+			os.WriteFile(path, data, 0644)
+			sb.WriteString(fmt.Sprintf("✅ vmagent HTTP探测: %s (%d 个)\n", path, len(httpTargets)))
+		}
+		if len(icmpTargets) > 0 {
+			data, _ := json.MarshalIndent(icmpTargets, "", "  ")
+			path := filepath.Join(targetsDir, "blackbox-icmp.json")
+			os.WriteFile(path, data, 0644)
+			sb.WriteString(fmt.Sprintf("✅ vmagent ICMP探测: %s (%d 个)\n", path, len(icmpTargets)))
+		}
 	}
 
-	// 写入 ICMP 探测配置
-	if len(icmpTargets) > 0 {
-		data, _ := json.MarshalIndent(icmpTargets, "", "  ")
-		path := filepath.Join(outputDir, "blackbox-icmp.json")
-		os.WriteFile(path, data, 0644)
-		results = append(results, fmt.Sprintf("ICMP 探测: %d 个 -> %s", len(icmpTargets), path))
+	if format == "blackbox" || format == "all" {
+		blackboxDir := filepath.Join(outputDir, "blackbox-exporter")
+		os.MkdirAll(blackboxDir, 0755)
+		var cfg strings.Builder
+		cfg.WriteString("# Blackbox Exporter 配置 - 自动生成\n\n")
+		cfg.WriteString("modules:\n")
+		cfg.WriteString("  http_2xx:\n    prober: http\n  icmp:\n    prober: icmp\n")
+		path := filepath.Join(blackboxDir, "blackbox.yml")
+		os.WriteFile(path, []byte(cfg.String()), 0644)
+		sb.WriteString(fmt.Sprintf("✅ Blackbox配置: %s\n", path))
 	}
 
-	// 写入 TCP 探测配置
-	if len(tcpTargets) > 0 {
-		data, _ := json.MarshalIndent(tcpTargets, "", "  ")
-		path := filepath.Join(outputDir, "blackbox-tcp.json")
-		os.WriteFile(path, data, 0644)
-		results = append(results, fmt.Sprintf("TCP 探测: %d 个 -> %s", len(tcpTargets), path))
-	}
-
-	return fmt.Sprintf("✅ Blackbox Exporter 配置已生成:\n%s", strings.Join(results, "\n")), nil
+	return sb.String(), nil
 }
 
 // toolGenerateIPMIConfig 生成 IPMI Exporter 配置
@@ -1975,75 +2114,59 @@ func (c *Chat) toolGenerateIPMIConfig(args string) (string, error) {
 			Username string `json:"username"`
 			Password string `json:"password"`
 		} `json:"devices"`
+		Format string `json:"format"`
 	}
 
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", fmt.Errorf("解析参数失败: %w", err)
 	}
 
-	outputDir := "./output/infra/config/vmagent/targets"
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return "", fmt.Errorf("创建目录失败: %w", err)
+	format := params.Format
+	if format == "" {
+		format = "vmagent"
 	}
 
-	// 生成 File SD 配置
-	var targets []map[string]interface{}
-	for _, device := range params.Devices {
-		port := device.Port
-		if port == "" {
-			port = "9290"
+	outputDir := "./output/infra/config"
+	os.MkdirAll(outputDir, 0755)
+
+	var sb strings.Builder
+	sb.WriteString("=== ⚡ IPMI 物理服务器监控配置 ===\n\n")
+	sb.WriteString(fmt.Sprintf("输出格式: %s\n\n", format))
+
+	if format == "vmagent" || format == "all" {
+		targets := []map[string]interface{}{}
+		for _, device := range params.Devices {
+			targets = append(targets, map[string]interface{}{
+				"targets": []string{device.Host},
+				"labels": map[string]string{
+					"job":      "ipmi",
+					"instance": device.Name,
+				},
+			})
 		}
+		targetsDir := filepath.Join(outputDir, "vmagent/targets")
+		os.MkdirAll(targetsDir, 0755)
+		path := filepath.Join(targetsDir, "ipmi-devices.json")
+		data, _ := json.MarshalIndent(targets, "", "  ")
+		os.WriteFile(path, data, 0644)
+		sb.WriteString(fmt.Sprintf("✅ vmagent File SD: %s\n", path))
+	}
 
-		target := map[string]interface{}{
-			"targets": []string{fmt.Sprintf("%s:%s", device.Host, port)},
-			"labels": map[string]string{
-				"job":      "ipmi",
-				"instance": device.Name,
-			},
+	if format == "telegraf" || format == "all" {
+		var cfg strings.Builder
+		cfg.WriteString("# Telegraf IPMI 配置 - 自动生成\n\n")
+		cfg.WriteString("[[inputs.ipmi_sensor]]\ninterval = \"60s\"\n\n")
+		for _, dev := range params.Devices {
+			cfg.WriteString(fmt.Sprintf("# %s (%s)\n", dev.Name, dev.Host))
 		}
-
-		targets = append(targets, target)
+		telegrafDir := filepath.Join(outputDir, "telegraf")
+		os.MkdirAll(telegrafDir, 0755)
+		path := filepath.Join(telegrafDir, "ipmi.conf")
+		os.WriteFile(path, []byte(cfg.String()), 0644)
+		sb.WriteString(fmt.Sprintf("✅ Telegraf: %s\n", path))
 	}
 
-	data, err := json.MarshalIndent(targets, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("生成 JSON 失败: %w", err)
-	}
-
-	outputPath := filepath.Join(outputDir, "ipmi-devices.json")
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
-		return "", fmt.Errorf("写入文件失败: %w", err)
-	}
-
-	// 生成 Telegraf IPMI 配置
-	telegrafConfig := `# IPMI 监控配置
-[[inputs.ipmi_sensor]]
-  ## IPMI 设备列表
-  # servers = ["USERID:PASSW0RD@lan(192.168.1.1)"]
-  
-  ## 采集间隔
-  interval = "30s"
-  
-  ## 超时设置
-  timeout = "20s"
-`
-
-	for _, device := range params.Devices {
-		username := device.Username
-		if username == "" {
-			username = "ADMIN"
-		}
-		password := device.Password
-		if password == "" {
-			password = "ADMIN"
-		}
-		telegrafConfig += fmt.Sprintf("  servers = [\"%s:%s@lan(%s)\"]\n", username, password, device.Host)
-	}
-
-	telegrafPath := "./output/infra/config/telegraf/telegraf-ipmi.conf"
-	os.WriteFile(telegrafPath, []byte(telegrafConfig), 0644)
-
-	return fmt.Sprintf("✅ IPMI Exporter 配置已生成:\n- File SD: %s\n- Telegraf: %s\n包含 %d 台服务器", outputPath, telegrafPath, len(params.Devices)), nil
+	return sb.String(), nil
 }
 
 // toolGenerateProxmoxConfig 生成 Proxmox VE 配置
@@ -2057,66 +2180,68 @@ func (c *Chat) toolGenerateProxmoxConfig(args string) (string, error) {
 			Password string `json:"password"`
 			Token    string `json:"token"`
 		} `json:"nodes"`
+		Format string `json:"format"`
 	}
 
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
 		return "", fmt.Errorf("解析参数失败: %w", err)
 	}
 
+	format := params.Format
+	if format == "" {
+		format = "vmagent"
+	}
+
 	outputDir := "./output/infra/config"
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return "", fmt.Errorf("创建目录失败: %w", err)
-	}
+	os.MkdirAll(outputDir, 0755)
 
-	// 生成 Proxmox Exporter 环境变量
-	envContent := "# Proxmox VE Exporter 配置\n"
-	for _, node := range params.Nodes {
-		port := node.Port
-		if port == "" {
-			port = "8006"
-		}
+	var sb strings.Builder
+	sb.WriteString("=== 🐧 Proxmox VE 虚拟化监控配置 ===\n\n")
+	sb.WriteString(fmt.Sprintf("输出格式: %s\n\n", format))
 
-		envContent += fmt.Sprintf("\n# %s\n", node.Name)
-		envContent += fmt.Sprintf("PROXMOX_HOST_%s=%s\n", strings.ToUpper(node.Name), node.Host)
-		envContent += fmt.Sprintf("PROXMOX_PORT_%s=%s\n", strings.ToUpper(node.Name), port)
-
-		if node.Token != "" {
-			envContent += fmt.Sprintf("PROXMOX_TOKEN_%s=%s\n", strings.ToUpper(node.Name), node.Token)
-		} else {
-			username := node.Username
-			if username == "" {
-				username = "root@pam"
-			}
-			envContent += fmt.Sprintf("PROXMOX_USER_%s=%s\n", strings.ToUpper(node.Name), username)
-			envContent += fmt.Sprintf("PROXMOX_PASSWORD_%s=%s\n", strings.ToUpper(node.Name), node.Password)
-		}
-	}
-
-	envPath := filepath.Join(outputDir, "proxmox.env")
-	if err := os.WriteFile(envPath, []byte(envContent), 0644); err != nil {
-		return "", fmt.Errorf("写入文件失败: %w", err)
-	}
-
-	// 生成 Prometheus Scrape 配置
-	scrapeConfig := fmt.Sprintf(`
-  - job_name: 'proxmox'
-    static_configs:
-      - targets:
-%s
-    metrics_path: /pve
-    scheme: https
-    tls_config:
-      insecure_skip_verify: true
-`, func() string {
-		var targets []string
+	if format == "vmagent" || format == "all" {
+		// 生成环境变量
+		var envContent strings.Builder
+		envContent.WriteString("# Proxmox VE Exporter 配置 - 自动生成\n")
 		for _, node := range params.Nodes {
-			targets = append(targets, fmt.Sprintf("        - '%s:9221'", node.Name))
+			envContent.WriteString(fmt.Sprintf("\n# %s\n", node.Name))
+			envContent.WriteString(fmt.Sprintf("PROXMOX_HOST_%s=%s\n", strings.ToUpper(node.Name), node.Host))
 		}
-		return strings.Join(targets, "\n")
-	}())
+		envPath := filepath.Join(outputDir, "proxmox.env")
+		os.WriteFile(envPath, []byte(envContent.String()), 0644)
+		sb.WriteString(fmt.Sprintf("✅ 环境变量: %s\n", envPath))
 
-	scrapePath := filepath.Join(outputDir, "proxmox-scrape.yml")
-	os.WriteFile(scrapePath, []byte(scrapeConfig), 0644)
+		// 生成 vmagent targets
+		targets := []map[string]interface{}{}
+		for _, node := range params.Nodes {
+			targets = append(targets, map[string]interface{}{
+				"targets": []string{fmt.Sprintf("%s:9221", node.Host)},
+				"labels": map[string]string{
+					"job":      "proxmox",
+					"instance": node.Name,
+				},
+			})
+		}
+		targetsDir := filepath.Join(outputDir, "vmagent/targets")
+		os.MkdirAll(targetsDir, 0755)
+		targetsPath := filepath.Join(targetsDir, "proxmox-nodes.json")
+		data, _ := json.MarshalIndent(targets, "", "  ")
+		os.WriteFile(targetsPath, data, 0644)
+		sb.WriteString(fmt.Sprintf("✅ vmagent File SD: %s\n", targetsPath))
+	}
 
-	return fmt.Sprintf("✅ Proxmox VE 配置已生成:\n- 环境变量: %s\n- Scrape 配置: %s\n包含 %d 个节点", envPath, scrapePath, len(params.Nodes)), nil
+	if format == "pve_exporter" || format == "all" {
+		var cfg strings.Builder
+		cfg.WriteString("# Proxmox VE Exporter 配置 - 自动生成\n\n")
+		cfg.WriteString("modules:\n  default:\n    metrics:\n      - nodes\n      - qemu\n      - lxc\n      - storage\n")
+		exporterDir := filepath.Join(outputDir, "pve-exporter")
+		os.MkdirAll(exporterDir, 0755)
+		path := filepath.Join(exporterDir, "pve.yml")
+		os.WriteFile(path, []byte(cfg.String()), 0644)
+		sb.WriteString(fmt.Sprintf("✅ PVE Exporter: %s\n", path))
+	}
+
+	sb.WriteString(fmt.Sprintf("\n📊 包含节点: %d 个\n", len(params.Nodes)))
+
+	return sb.String(), nil
 }
